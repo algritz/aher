@@ -1,6 +1,6 @@
 == Prices 0.0.3 ==
 by algritz
-Created december 8th, 2011
+Created december 12th, 2011
 
 
 Prices is allows to diplay a frame containing a list of items as well as their prices.
