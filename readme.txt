@@ -2,13 +2,12 @@
 by algritz
 Created december 12th, 2011
 
-
-Prices is allows to diplay a frame containing a list of items as well as their prices.
-Its goal is to avoir to do back and forth between the Rift-Auction-Management tool and Rift.
+Since, Rift isn't very good are remembering prices, I figure I'd share the add-on for the benefit of having a "Price list" that was available in game, not on some web site or excel spreedsheet if you used any.
 
 Features:
 
-* Displayed a list of items and their prices in a scrollable window, that can be shown via the "/prices" command
+Displays a list of items and their prices in a scrollable window, that can be shown via the "/prices" command
+
 
 == Installation Instructions ==
 
@@ -26,16 +25,15 @@ Features:
 In order to update the values displayed in game, you need to edit the "prices.lua" file in your saved variable.
 format is :
 
-item_prices = {
-	{
+item_prices = {{
 		{
-			"item name # 1",
-			"price #1"
+		 "item name # 1",
+		 "price #1"
 		},
                 {
-                        "item name 2",
-                        "price # 2"
-       }
+                 "item name 2",
+                 "price # 2"
+       		}
 }}
 
 -- As long as this format is preserved, the addon will be able to display the list and its associated values
