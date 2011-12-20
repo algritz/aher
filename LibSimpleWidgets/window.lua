@@ -61,16 +61,10 @@ local function SetCloseButtonVisible(self, visible)
     if self.closeButton then
       self.closeButton:SetVisible(true)
     else
-      local closeButton = UI.CreateFrame("Texture", self:GetName().."CloseButton", self)
-      closeButton:SetTexture("LibSimpleWidgets", "textures/close.png")
-      closeButton:SetPoint("TOPRIGHT", self, "TOPRIGHT", -10, 18)
-      function closeButton.Event:MouseIn()
-        closeButton:SetTexture("LibSimpleWidgets", "textures/close-highlight.png")
-      end
-      function closeButton.Event:MouseOut()
-        closeButton:SetTexture("LibSimpleWidgets", "textures/close.png")
-      end
-      function closeButton.Event:LeftClick()
+      local closeButton = UI.CreateFrame("RiftButton", self:GetName().."CloseButton", self)
+      closeButton:SetSkin("close")
+      closeButton:SetPoint("TOPRIGHT", self, "TOPRIGHT", -8, 15)
+      function closeButton.Event:LeftPress()
         local window = self:GetParent()
         window:SetVisible(false)
         if window.Event.Close then

@@ -16,6 +16,14 @@ local function SetFontSize(self, size)
   self:SetHeight(math.min(MAX_HEIGHT, self.text:GetFullHeight() + PADDING * 2))
 end
 
+local function GetFontColor(self)
+  return self.text:GetFontColor()
+end
+
+local function SetFontColor(self, r, g, b, a)
+  self.text:SetFontColor(r, g, b, a)
+end
+
 local function Show(self, owner, text)
   self.owner = owner
   self.text:SetText(text)
@@ -41,6 +49,12 @@ local function InjectEvents(self, frame, tooltipTextFunc)
   frame.Event.MouseOut = function() tooltip:Hide(frame) end
 end
 
+local function RemoveEvents(self, frame)
+  frame.Event.MouseIn = nil
+  frame.Event.MouseMove = nil
+  frame.Event.MouseOut = nil
+end
+
 
 -- Constructor Function
 
@@ -60,9 +74,12 @@ function Library.LibSimpleWidgets.Tooltip(name, parent)
 
   widget.GetFontSize = GetFontSize
   widget.SetFontSize = SetFontSize
+  widget.GetFontColor = GetFontColor
+  widget.SetFontColor = SetFontColor
   widget.Show = Show
   widget.Hide = Hide
   widget.InjectEvents = InjectEvents
+  widget.RemoveEvents = RemoveEvents
 
   return widget
 end

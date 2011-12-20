@@ -1,15 +1,16 @@
 -- Internal Functions
 
 local function ContentResized(self)
-  if self.content:GetHeight() < self:GetHeight() then
+  local maxOffset = self:GetMaxOffset()
+  if maxOffset == 0 then
     self.scrollbar:SetVisible(false)
     self.offset = 0
   else
-    local maxOffset = self:GetMaxOffset()
     if self.offset > maxOffset then
       self.offset = maxOffset
     end
-    self.scrollbar:SetHeight(self:GetHeight() / self.content:GetHeight() * self:GetHeight())
+    self.scrollbar:SetRange(0, maxOffset)
+    self.scrollbar:SetThickness(self:GetHeight() / self.content:GetHeight() * maxOffset)
     self.scrollbar:SetVisible(self.showScrollbar)
   end
   self:PositionContent()
@@ -27,11 +28,7 @@ local function ScrollTo(self, offset)
 end
 
 local function GetMaxOffset(self)
-  return self.content:GetHeight() - self:GetHeight()
-end
-
-local function GetOffsetForScrollbarY(self, y)
-  return y / self:GetHeight() * self.content:GetHeight()
+  return math.max(0, self.content:GetHeight() - self:GetHeight())
 end
 
 local function PositionContent(self)
@@ -40,8 +37,9 @@ local function PositionContent(self)
 end
 
 local function PositionScrollbar(self)
-  local scrollbarOffset = self.offset / self.content:GetHeight() * self:GetHeight()
-  self.scrollbar:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, scrollbarOffset)
+  if self.scrollbar:GetVisible() then
+    self.scrollbar:SetPosition(self.offset)
+  end
 end
 
 
@@ -56,11 +54,7 @@ local function WheelForward(self)
     return
   end
 
-  if self.offset >= self.scrollInterval then
-    self.offset = self.offset - self.scrollInterval
-  else
-    self.offset = 0
-  end
+  self.offset = math.max(0, self.offset - self.scrollInterval)
 
   self:PositionContent()
   self:PositionScrollbar()
@@ -75,12 +69,8 @@ local function WheelBack(self)
     return
   end
 
-  local maxOffset = self:GetMaxOffset()
-  if self.offset <= maxOffset - self.scrollInterval then
-    self.offset = self.offset + self.scrollInterval
-  else
-    self.offset = maxOffset
-  end
+  local _, maxOffset = self.scrollbar:GetRange()
+  self.offset = math.min(maxOffset, self.offset + self.scrollInterval)
 
   self:PositionContent()
   self:PositionScrollbar()
@@ -118,6 +108,10 @@ local function SetContent(self, content)
   content:SetParent(self)
   content:SetLayer(5)
 
+  local height = content:GetHeight()
+  content:ClearAll()
+  content:SetHeight(height)
+
   self.oldContentSizeFunc = content.Event.Size
   content.Event.Size = ContentSizeChanged
 
@@ -141,14 +135,6 @@ local function SetShowScrollbar(self, show)
   self.scrollbar:SetVisible(show)
 end
 
-local function GetScrollbarColor(self)
-  return self.scrollbar:GetBackgroundColor()
-end
-
-local function SetScrollbarColor(self, r, g, b, a)
-  self.scrollbar:SetBackgroundColor(r, g, b, a)
-end
-
 local function GetScrollbarWidth(self)
   return self.scrollbar:GetWidth()
 end
@@ -161,37 +147,17 @@ end
 -- Constructor Functions
 
 local function CreateScrollbar(scrollview)
-  local scrollbar = UI.CreateFrame("Frame", scrollview:GetName().."Scrollbar", scrollview:GetParent())
+  local scrollbar = UI.CreateFrame("RiftScrollbar", scrollview:GetName().."Scrollbar", scrollview:GetParent())
   scrollbar.scrollview = scrollview
+  scrollbar:SetOrientation("vertical")
   scrollbar:SetLayer(10)
-  scrollbar:SetWidth(10)
-  scrollbar:SetBackgroundColor(1, 1, 1, 0.5)
+--  scrollbar:SetWidth(10)
   scrollbar:SetPoint("TOPRIGHT", scrollview, "TOPRIGHT", 0, 0)
+  scrollbar:SetPoint("BOTTOMRIGHT", scrollview, "BOTTOMRIGHT", 0, 0)
   scrollbar:SetVisible(false)
-  scrollbar.leftDown = false
-  function scrollbar.Event:LeftDown()
-    self.leftDown = true
-    self.originalYDiff = Inspect.Mouse().y - self:GetTop()
-  end
-  function scrollbar.Event:LeftUp()
-    self.leftDown = false
-  end
-  function scrollbar.Event:LeftUpoutside()
-    self.leftDown = false
-  end
-  function scrollbar.Event:MouseMove(x, y)
-    if not self.leftDown then
-      return
-    end
-
-    local widget = self.scrollview
-
-    local relY = y - widget:GetTop()
-    local newScrollY = relY - self.originalYDiff
-    widget.offset = math.min(widget:GetMaxOffset(), math.max(0, widget:GetOffsetForScrollbarY(newScrollY)))
-
-    widget:PositionContent()
-    widget:PositionScrollbar()
+  scrollbar.Event.ScrollbarChange = function()
+    scrollview.offset = scrollbar:GetPosition()
+    scrollview:PositionContent()
   end
   return scrollbar
 end
@@ -217,8 +183,6 @@ function Library.LibSimpleWidgets.ScrollView(name, parent)
   widget.SetScrollInterval = SetScrollInterval
   widget.GetShowScrollbar = GetShowScrollbar
   widget.SetShowScrollbar = SetShowScrollbar
-  widget.GetScrollbarColor = GetScrollbarColor
-  widget.SetScrollbarColor = SetScrollbarColor
   widget.GetScrollbarWidth = GetScrollbarWidth
   widget.SetScrollbarWidth = SetScrollbarWidth
 
@@ -227,7 +191,6 @@ function Library.LibSimpleWidgets.ScrollView(name, parent)
   widget.GetScrollOffset = GetScrollOffset
   widget.ScrollTo = ScrollTo
   widget.GetMaxOffset = GetMaxOffset
-  widget.GetOffsetForScrollbarY = GetOffsetForScrollbarY
   widget.PositionContent = PositionContent
   widget.PositionScrollbar = PositionScrollbar
 

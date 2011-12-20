@@ -15,12 +15,12 @@ local function prices()
   SWT_Window:SetCloseButtonVisible(true)
   SWT_Window:SetTitle("Price List")
   SWT_Window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, 100)
-  SWT_Window:SetWidth(330)
+  SWT_Window:SetWidth(400)
   SWT_Window:SetHeight(400)
   SWT_Window:SetBackgroundColor(3,3,3,0)
   SWT_Window.listScrollView = UI.CreateFrame("SimpleScrollView", "SWT_TestScrollView", SWT_Window:GetContent())
   SWT_Window.listScrollView:SetPoint("TOPLEFT", SWT_Window:GetContent(), "TOPLEFT")
-  SWT_Window.listScrollView:SetWidth(300)
+  SWT_Window.listScrollView:SetWidth(370)
   SWT_Window.listScrollView:SetHeight(330)
   SWT_Window.listScrollView:SetBackgroundColor(3,3,3,0)
   SWT_Window.list = UI.CreateFrame("SimpleList", "SWT_TestList", SWT_Window.listScrollView)
@@ -33,6 +33,7 @@ local function prices()
       table.insert(items, item_prices_db[1][i][1] .. " : " .. item_prices_db[1][i][2] )
     end
     SWT_Window.list:SetItems(items)
+
     SWT_Window.listScrollView:SetContent(SWT_Window.list)
     else
            items = {"Your Prices.lua file is empty", "Add some values first", "Then log back in"}

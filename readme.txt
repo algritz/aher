@@ -1,4 +1,4 @@
-== Prices 0.0.3 ==
+== Prices 0.0.4 ==
 by algritz
 Created december 12th, 2011
 

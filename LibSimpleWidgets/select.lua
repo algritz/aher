@@ -9,6 +9,16 @@ local function contains(tbl, val)
   return false
 end
 
+local function UpdateSelection(self, index)
+  local item = self.items[index]
+
+  if index == nil then
+    self.current:SetText("Select...")
+  else
+    self.current:SetText(item)
+  end
+end
+
 
 -- Current Frame Events
 
@@ -107,12 +117,6 @@ local function SetItems(self, items, values)
   self.items = items
   self.values = values or {}
 
-  -- reset the selected item if it doesn't exist in the new items
-  local oldSelectedIndex = self.selectedIndex
-  if not contains(self.items, self:GetSelectedItem()) then
-    self.current:SetText("Select...")
-  end
-
   -- setup item frames
   local dropdownHeight = 0
   local prevItemFrame
@@ -151,7 +155,8 @@ local function SetItems(self, items, values)
 
   self.dropdown:SetHeight(dropdownHeight)
 
-  self:SetSelectedIndex(oldSelectedIndex)
+  self.selectedIndex = nil
+  UpdateSelection(self, nil)
 end
 
 local function GetValues(self)
@@ -205,21 +210,14 @@ local function SetSelectedIndex(self, index)
     return
   end
 
-  local item = self.items[index]
-  local value = self.values[index]
-
   self.selectedIndex = index
-
-  if index == nil then
-    self.current:SetText("Select...")
-  else
-    self.current:SetText(item)
-  end
+  UpdateSelection(self, index)
 
   if self.Event.ItemSelect then
+    local item = self.items[index]
+    local value = self.values[index]
     self.Event.ItemSelect(self, item, value, index)
   end
-
 end
 
 
