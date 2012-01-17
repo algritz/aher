@@ -50,8 +50,9 @@ local function mailstatus()
 end
 
 local function slashcommands(command)
-	mailboxparser()
+
 	if(command.match("mailbox",command))then
+		mailboxparser()
 		print("parsing complete")
 	else if(command.match("status",command)) then
 			mailstatus()
