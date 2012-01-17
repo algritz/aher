@@ -1,12 +1,12 @@
-== Prices 0.0.4 ==
+== Aher 0.0.1 ==
 by algritz
-Created december 12th, 2011
+Created January 16th, 2012
 
-Since, Rift isn't very good are remembering prices, I figure I'd share the add-on for the benefit of having a "Price list" that was available in game, not on some web site or excel spreedsheet if you used any.
+This add-on will try to remember the selling price of your auctions and save the "outcome" (sold, expired) status
 
 Features:
 
-Displays a list of items and their prices in a scrollable window, that can be shown via the "/prices" command
+TBC
 
 
 == Installation Instructions ==
@@ -16,31 +16,13 @@ Displays a list of items and their prices in a scrollable window, that can be sh
 * From character select, click the "Addons" button at the bottom
 * Click the "Open Addon Directory" button
 * Wait for the directory to open up
-* Put the Prices folder into that directory
+* Put the aher folder into that directory
 * Return to Rift
 * Click "Refresh"
 * Play the game!
 
 == Usage ==
-In order to update the values displayed in game, you need to edit the "prices.lua" file in your saved variable.
-format is :
-
-item_prices = {{
-		{
-		 "item name # 1",
-		 "price #1"
-		},
-                {
-                 "item name 2",
-                 "price # 2"
-       		}
-}}
-
--- As long as this format is preserved, the addon will be able to display the list and its associated values
-
-* values are loaded only at login time. So it you need fresh values, logout, overwrite the content, then log back in.
-
-To diplay the list in game type the "/Prices" command
+TBC
 
 == Thanks To ==
 

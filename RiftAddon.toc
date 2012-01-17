@@ -15,5 +15,5 @@ RunOnStartup = {
 	"aher.lua"
 }
 SavedVariables = {
-	settings = "account",
+	auction_history = "account",
 }
