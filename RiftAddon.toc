@@ -1,8 +1,8 @@
-Identifier = "Prices"
-Name = "Prices"
-Description = "Prices shows the price of items in a window"
+Identifier = "aher"
+Name = "aher"
+Description = "Manipulating the AH"
 Author = "algritz@videotron.ca"
-Version = "0.0.4"
+Version = "0.0.1"
 Email = "algritz@videotron.ca"
 Environment = "1.6"
 Embed = {
@@ -12,8 +12,8 @@ Dependencies = {
 	LibSimpleWidgets = {"required", "before"},
 };
 RunOnStartup = {
-	"Prices.lua"
+	"aher.lua"
 }
 SavedVariables = {
-	item_prices = "account",
+	settings = "account",
 }
