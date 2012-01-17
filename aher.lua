@@ -61,7 +61,7 @@ end
 
 local function settingssave()
    if item_prices_db then
-   	item_prices = item_prices_db
+   	auction_results = item_prices_db
    end
 end
 
