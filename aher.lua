@@ -1,5 +1,5 @@
-local auction_results =   {}
-local auction_history = {}
+local mail_history_db = {}
+local mail_history
 
 local function GetRGB(hex)
 	local tbl = {}
@@ -32,8 +32,8 @@ local function mailboxparser()
 				-- for now, just outputting the content, but will eventually need to parse it
 				print(kn .. " : " .. vd)
 				-- verify we haven't already processed this email, if not, we add  it to the parsed list
-				if not setContains(auction_results, k) then
-					addToSet(auction_results, k)
+				if not setContains(mail_history, k) then
+					addToSet(mail_history, k)
 					-- Additional email parsing based on body details
 				--## HERE
 				--
@@ -44,34 +44,22 @@ local function mailboxparser()
 end
 
 local function mailstatus()
-	for k, v in pairs(auction_results) do
+	for k, v in pairs(mail_history) do
 		print(k)
 	end
 end
 
-local function slashcommands(command)
 
-	if(command.match("mailbox",command))then
-		mailboxparser()
-		print("parsing complete")
-	else if(command.match("status",command)) then
-			mailstatus()
-			print("status report complete")
-		end
-	end
-end
 
 local function settingssave()
-	if item_prices_db then
-		auction_results = item_prices_db
-	end
+	mail_history_db = mail_history
 end
 
 local function settingsload()
-	if settings ~= {{}}  then
-		item_prices_db = item_prices
+	if mail_history_db ~= {{}}  then
+		mail_history = mail_history_db
 	else
-		item_prices_db = {}
+		mail_history = {}
 	end
 end
 
@@ -88,9 +76,23 @@ function setContains(set, key)
 	return set[key]
 end
 
-
 table.insert(Event.Addon.SavedVariables.Save.Begin, {function () settingssave() end, "aher", "Save variables"})
 table.insert(Event.Addon.SavedVariables.Load.Begin, {function () settingsload() end, "aher", "Load variables"})
 
+local function slashcommands(command)
+
+	if(command.match("mailbox",command))then
+		mailboxparser()
+		print("parsing complete")
+	else if(command.match("status",command)) then
+			mailstatus()
+			print("status report complete")
+		else if(command.match("save",command)) then
+				settingssave()
+				print("save complete")
+			end
+		end
+	end
+end
 
 table.insert(Command.Slash.Register("aher"), {slashcommands, "aher", "Slash command"})
