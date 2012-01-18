@@ -1,4 +1,3 @@
-local mail_history_db = {}
 local mail_history
 
 local function GetRGB(hex)
@@ -15,32 +14,44 @@ local function mailboxparser()
 	-- get the list of email
 	mailList = Inspect.Mail.List()
 	-- fetch through each emails
-
 	for k, v in pairs(mailList) do
-		-- open each email to have access to details
-		Command.Mail.Open(k)
-		-- get details for each
-		details = (Inspect.Mail.Detail(k))
-		-- parsing each attributes from the email
-		for kn, vd in pairs (details) do
-			-- found the content of the email
-			if (kn == "subject") then
-				-- for now, just outputting the content, but will eventually need to parse it
-				print(kn .. " : " .. vd)
-			end
-			if (kn == "body") then
-				-- for now, just outputting the content, but will eventually need to parse it
-				print(kn .. " : " .. vd)
-				-- verify we haven't already processed this email, if not, we add  it to the parsed list
-				if not setContains(mail_history, k) then
-					addToSet(mail_history, k)
-					-- Additional email parsing based on body details
-				--## HERE
-				--
+		-- if email hasn't been parsed previously
+		if not setContains(mail_history, k) then
+			-- open email to have access to details
+			Command.Mail.Open(k)
+			-- get details
+			details = (Inspect.Mail.Detail(k))
+			-- parsing each attributes from the email
+			mail_details = {}
+			for kn, vd in pairs (details) do
+				-- read the content of the email
+				if (kn == "from") then
+					print(kn .. " : " .. vd)
+					table.insert(mail_details, vd)
 				end
+				if (kn == "subject") then
+					-- for now, just outputting the content, but will eventually need to parse it
+					print(kn .. " : " .. vd)
+					table.insert(mail_details, vd)
+				end
+				if (kn == "body") then
+					-- for now, just outputting the content, but will eventually need to parse it
+					print(kn .. " : " .. vd)
+					
+					-- Additional email parsing based on body details
+					--## HERE
+					--
+					
+					table.insert(mail_details, vd)
+					-- we add email and content to the parsed list
+					addToSet(mail_history, k, mail_details)
+				end
+
+
 			end
 		end
 	end
+	print("parsing complete")
 end
 
 local function mailstatus()
@@ -56,16 +67,18 @@ local function settingssave()
 end
 
 local function settingsload()
-	if mail_history_db ~= {{}}  then
+	print("aher settings loading...")
+	if mail_history_db ~= nil then
 		mail_history = mail_history_db
 	else
+		print("loading failed")
 		mail_history = {}
 	end
 end
 
 
-function addToSet(set, key)
-	set[key] = true
+function addToSet(set, key, value)
+	set[key] = value
 end
 
 function removeFromSet(set, key)
@@ -75,7 +88,6 @@ end
 function setContains(set, key)
 	return set[key]
 end
-
 table.insert(Event.Addon.SavedVariables.Save.Begin, {function () settingssave() end, "aher", "Save variables"})
 table.insert(Event.Addon.SavedVariables.Load.Begin, {function () settingsload() end, "aher", "Load variables"})
 
@@ -83,7 +95,6 @@ local function slashcommands(command)
 
 	if(command.match("mailbox",command))then
 		mailboxparser()
-		print("parsing complete")
 	else if(command.match("status",command)) then
 			mailstatus()
 			print("status report complete")
