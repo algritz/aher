@@ -16,4 +16,5 @@ RunOnStartup = {
 }
 SavedVariables = {
 	mail_history_db = "character",
+	auction_results = "character"
 }
