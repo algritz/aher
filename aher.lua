@@ -34,19 +34,22 @@ local function mailboxparser()
 					print(kn .. " : " .. vd)
 					table.insert(mail_details, vd)
 				end
+				if (kn == "attachments" and tonumber(vd) == nil ) then
+					table.foreach(vd,print)
+					table.insert(mail_details, vd)
+				end
 				if (kn == "body") then
 					-- for now, just outputting the content, but will eventually need to parse it
 					print(kn .. " : " .. vd)
-					
+
 					-- Additional email parsing based on body details
 					--## HERE
 					--
-					
+
 					table.insert(mail_details, vd)
 					-- we add email and content to the parsed list
 					addToSet(mail_history, k, mail_details)
 				end
-
 
 			end
 		end
