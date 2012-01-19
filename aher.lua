@@ -30,42 +30,28 @@ local function mailboxparser()
 			details = (Inspect.Mail.Detail(k))
 			-- table that will store the mail content
 			mail_details = {}
-			-- parsing each attributes from the email
-			for kn, vd in pairs (details) do
-				-- read the sender	
-				if (kn == "from") then
-					-- adding to the mail_details
-					table.insert(mail_details, vd)
-				end
-				-- read the subject
-				if (kn == "subject") then
-					-- for now, just outputting the content, but will eventually need to parse it
-					print(kn .. " : " .. vd)
-					-- adding to the mail_details
-					table.insert(mail_details, vd)
-				end
-				if (kn == "attachments" and tonumber(vd) == nil ) then
-					-- for now, just outputting the content, but will eventually need to parse it
-					table.foreach(vd,print)
-					-- adding to the mail_details
-					table.insert(mail_details, vd)
-				end
-				if (kn == "body") then
-					-- for now, just outputting the content, but will eventually need to parse it
-					print(kn .. " : " .. vd)
-
-					-- Additional email parsing based on body details
-					--## HERE
-					--
-
-					-- adding to the mail_details
-					table.insert(mail_details, vd)
-					-- we add email and content to the parsed list
-					addToSet(mail_history, k, mail_details)
-					print("processed email #" .. processed_mail_count)
-					processed_mail_count = processed_mail_count + 1
+			-- feeding the table
+			table.insert(mail_details, details["from"])
+			table.insert(mail_details, details["subject"])
+			table.insert(mail_details, details["body"])
+			--table.insert(mail_details, os.date)
+			-- table that will contain teh attachment list if there is any
+			attachment_list = {}
+			-- detecty if the is any attachment
+			if tonumber(details["attachments"]) == nil and details["attachments"] ~= nil then
+				-- add item ids in a table
+				for ka, va in pairs(details["attachments"]) do
+					table.insert(attachment_list, va)
 				end
 			end
+			table.insert(mail_details, attachment_list)
+			-- detect if mail is actually "read" (only way to declare the mail as processed)
+			if details["body"] ~= nil then
+				addToSet(mail_history, k, mail_details)
+				print("processed email #" .. processed_mail_count)
+				processed_mail_count = processed_mail_count + 1
+			end
+			
 			-- check if we're done processing
 			if mail_number == processed_mail_count then
 				print("Processing complete")
@@ -79,7 +65,10 @@ end
 -- output the content of the mail_history database
 local function mailstatus()
 	for k, v in pairs(mail_history) do
-		print(k .. " : " .. v)
+		print(k)
+		for kd, vd in pairs(v) do
+			print(kd .. " : " .. tostring(vd))
+		end
 	end
 end
 
@@ -101,7 +90,7 @@ local function settingsload()
 end
 
 
--- These 3 functions will serve to manage the key / values we want to store in the databases (mail_history, auction_history) 
+-- These 3 functions will serve to manage the key / values we want to store in the databases (mail_history, auction_history)
 function addToSet(set, key, value)
 	set[key] = value
 end
