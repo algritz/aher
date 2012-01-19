@@ -51,7 +51,7 @@ local function mailboxparser()
 				print("processed email #" .. processed_mail_count)
 				processed_mail_count = processed_mail_count + 1
 			end
-			
+
 			-- check if we're done processing
 			if mail_number == processed_mail_count then
 				print("Processing complete")
@@ -64,12 +64,29 @@ end
 
 -- output the content of the mail_history database
 local function mailstatus()
+	-- loops through the mail_history database
 	for k, v in pairs(mail_history) do
+		-- prints out the email ID
 		print(k)
+		-- index to determine what property will be printed
+		i = 1
+		-- loops through the email attributes
 		for kd, vd in pairs(v) do
-			print(kd .. " : " .. tostring(vd))
+			-- check if "attachment" section is reached (#4)
+			if i == 4 then
+				-- print out the list of items attached
+				for ki, vi in pairs(v) do
+					print(vi)
+				end
+			else
+				-- print out the email attribute and its value
+				print(kd .. " : " .. tostring(vd))
+			end
+			-- increase the counter
+			i = i + 1
 		end
 	end
+	print("status report complete")
 end
 
 
@@ -89,6 +106,10 @@ local function settingsload()
 	end
 end
 
+local function printhelp()
+	print("Available options are: \n mailbox : to parse the mailbox \n status : to get the current status \n save : to force saving of email database")
+end
+
 
 -- These 3 functions will serve to manage the key / values we want to store in the databases (mail_history, auction_history)
 function addToSet(set, key, value)
@@ -103,23 +124,45 @@ function setContains(set, key)
 	return set[key]
 end
 
+
+-- implementing a switch function as LUA doesn't offer it "out of the box"
+function switch(c)
+	local swtbl = {
+	casevar = c,
+	caseof = function (self, code)
+		local f
+		if (self.casevar) then
+			f = code[self.casevar] or code.default
+		else
+			f = code.missing or code.default
+		end
+		if f then
+			if type(f)=="function" then
+				return f(self.casevar,self)
+			else
+				error("case "..tostring(self.casevar).." not a function")
+			end
+		end
+	end
+	}
+	return swtbl
+end
+
+
 -- adding the event handler triggers to save/load the databases
 table.insert(Event.Addon.SavedVariables.Save.Begin, {function () settingssave() end, "aher", "Save variables"})
 table.insert(Event.Addon.SavedVariables.Load.Begin, {function () settingsload() end, "aher", "Load variables"})
 
+
 -- adding the slash commands parameters
 local function slashcommands(command)
-	if(command.match("mailbox",command))then
-		mailboxparser()
-	else if(command.match("status",command)) then
-			mailstatus()
-			print("status report complete")
-		else if(command.match("save",command)) then
-				settingssave()
-				print("save complete")
-			end
-		end
-	end
+	print(command)
+	switch(command) : caseof {
+	["mailbox"] = function() mailboxparser() end,
+	["status"] = function () mailstatus() end,
+	["save"] = function() settingssave() end,
+	default = function() printhelp() end,
+	}
 end
 
 -- adding the slash commands handler
