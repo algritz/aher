@@ -1,4 +1,4 @@
-local mail_history
+--local mail_history
 
 local function GetRGB(hex)
 	local tbl = {}
@@ -48,13 +48,13 @@ local function mailboxparser()
 			-- detect if mail is actually "read" (only way to declare the mail as processed)
 			if details["body"] ~= nil then
 				addToSet(mail_history, k, mail_details)
-				print("processed email #" .. processed_mail_count)
+				print("reading email #" .. processed_mail_count)
 				processed_mail_count = processed_mail_count + 1
 			end
 
 			-- check if we're done processing
 			if mail_number == processed_mail_count then
-				print("Processing complete")
+				print("Email recording complete")
 			end
 		end
 	end
@@ -67,6 +67,7 @@ local function mailstatus()
 	-- loops through the mail_history database
 	for k, v in pairs(mail_history) do
 		-- prints out the email ID
+		print ("#######################")
 		print(k)
 		-- index to determine what property will be printed
 		i = 1
@@ -75,8 +76,11 @@ local function mailstatus()
 			-- check if "attachment" section is reached (#4)
 			if i == 4 then
 				-- print out the list of items attached
-				for ki, vi in pairs(v) do
-					print(vi)
+				print("The following items were attached:")
+				for ki, vi in pairs(vd) do
+					-- fetch the items detailed informations
+					item_details = Inspect.Item.Detail(vi)
+					print(item_details["name"])
 				end
 			else
 				-- print out the email attribute and its value
@@ -90,19 +94,115 @@ local function mailstatus()
 end
 
 
+local function process()
+	print("Starting to process emails")
+	-- processing each email
+	for mailkey, mailvalue in pairs(mail_history) do
+		-- database that will hold all the data from the auction house results once parsed
+		auction_details_pre_process = {}
+		other_mail_pre_process = {}
+		-- list that will hold the attachments contained in the email
+		attachment_list = {}
+		i = 1
+		-- for each property of the email
+		for auctionkey, auctionvalue in pairs(mailvalue) do
+			-- store each property (from, subject, body, attachments)
+			switch(i) : caseof {
+			[1] = function()
+				table.insert(auction_details_pre_process, auctionvalue)
+			end,
+			[2] = function ()
+				table.insert(auction_details_pre_process, auctionvalue)
+			end,
+			[3] = function()
+				table.insert(auction_details_pre_process, auctionvalue)
+			end,
+			[4] = function()
+				-- parse through the attachment list (treat as a table in every case as the number can vary)
+				for attachmentkey, attachmentvalue in pairs(auctionvalue) do
+					table.insert(attachment_list, attachmentvalue)
+				end
+				table.insert(auction_details_pre_process, attachment_list) end,
+			}
+			i = i + 1
+		end
+
+		-- if the email comes from the auction house, store it and remove it from the email_history (to limit filesize)
+		if auction_details_pre_process[1] == "Auction House" then
+			addToSet(auction_details_pre_process, mailkey, auction_details_pre_process)
+			removeFromSet(mail_history, mailkey)
+		else
+			-- we verify if the other_email has been parsed prior and if not add it to the list to parse
+			if not setContains(other_mail, mailkey) then
+				addToSet(other_mail_pre_process, mailkey, auction_details_pre_process)
+			end
+			-- remove the email from the mail_history (which is just a work table)
+			removeFromSet(mail_history, mailkey)
+		end
+	end
+
+	-- process emails not identified as coming from the auction house
+	for othermailkey, othermailvalue in pairs(other_mail_pre_process) do
+		-- parse only the attachments, as those are the only ones interesting
+		for attachmentkey, attachmentvalue in pairs(othermailvalue[4]) do
+			-- verify if the item is in the item_in_inventory database 
+			if setContains(items_in_inventory, attachmentkey) then
+				-- check how many is already owned (some transformations are necessary to get the value
+				current_quantity = setContains(items_in_inventory, attachmentkey)
+				pos = string.find(current_quantity[1], "= ", 1)
+				current_quantity = string.sub(current_quantity[1], pos + 2)
+				-- update the quantity
+				addToSet(items_in_inventory, attachmentkey, {attachmentvalue .. " = " .. tonumber(current_quantity) + 1 })
+			else
+				-- set the quantity to 1 (assume stacks, not stacksize)
+				addToSet(items_in_inventory, attachmentkey, {attachmentvalue .. " = 1 "})
+			end
+		end
+		-- add email id to other_email database, so it doesn't get processed ever again.
+		addToSet(other_mail, othermailkey, othermailvalue)
+	end
+
+	-- process emails comming from the auction house
+	for auctionkey, auctionvalue in pairs(auction_details_pre_process) do
+
+	end
+	print("Processing complete")
+end
+
 -- Save the mail_history database
 local function settingssave()
 	mail_history_db = mail_history
+	auction_results_db = auction_results
+	other_mail_db = other_mail
+	items_in_inventory_db = items_in_inventory
 end
 
--- reload the mail_history database
+-- reload the settings database
 local function settingsload()
 	print("aher settings loading...")
 	if mail_history_db ~= nil then
 		mail_history = mail_history_db
 	else
-		print("loading failed")
+		print("loading mail history failed")
 		mail_history = {}
+	end
+	if auction_results_db ~= nil then
+		auction_results = auction_results_db
+	else
+		print("loading auction history failed")
+		auction_results = {}
+	end
+	if other_mail_db ~= nil then
+		other_mail = other_mail_db
+	else
+		print("loading other mail history failed")
+		other_mail = {}
+	end
+	if items_in_inventory_db ~= nil then
+		items_in_inventory = items_in_inventory_db
+	else
+		print("loading items_in inventory database failed")
+		items_in_inventory = {}
 	end
 end
 
@@ -156,10 +256,10 @@ table.insert(Event.Addon.SavedVariables.Load.Begin, {function () settingsload() 
 
 -- adding the slash commands parameters
 local function slashcommands(command)
-	print(command)
 	switch(command) : caseof {
 	["mailbox"] = function() mailboxparser() end,
 	["status"] = function () mailstatus() end,
+	["process"] = function() process() end,
 	["save"] = function() settingssave() end,
 	default = function() printhelp() end,
 	}
