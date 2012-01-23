@@ -149,13 +149,13 @@ local function process()
 			if setContains(items_in_inventory, attachmentkey) then
 				-- check how many is already owned (some transformations are necessary to get the value
 				current_quantity = setContains(items_in_inventory, attachmentkey)
-				pos = string.find(current_quantity[1], "= ", 1)
-				current_quantity = string.sub(current_quantity[1], pos + 2)
+				quantity = {attachmentvalue, current_quantity[2] + 1}
 				-- update the quantity
-				addToSet(items_in_inventory, attachmentkey, {attachmentvalue .. " = " .. tonumber(current_quantity) + 1 })
+				addToSet(items_in_inventory, attachmentkey, quantity)
 			else
 				-- set the quantity to 1 (assume stacks, not stacksize)
-				addToSet(items_in_inventory, attachmentkey, {attachmentvalue .. " = 1 "})
+				quantity = {attachmentvalue, 1}
+				addToSet(items_in_inventory, attachmentkey, quantity)
 			end
 		end
 		-- add email id to other_email database, so it doesn't get processed ever again.
