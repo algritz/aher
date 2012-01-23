@@ -1,4 +1,4 @@
---local mail_history
+local auction_pre_process = {}
 
 local function GetRGB(hex)
 	local tbl = {}
@@ -129,7 +129,7 @@ local function process()
 
 		-- if the email comes from the auction house, store it and remove it from the email_history (to limit filesize)
 		if auction_details_pre_process[1] == "Auction House" then
-			addToSet(auction_details_pre_process, mailkey, auction_details_pre_process)
+			addToSet(auction_pre_process, mailkey, auction_details_pre_process)
 			removeFromSet(mail_history, mailkey)
 		else
 			-- we verify if the other_email has been parsed prior and if not add it to the list to parse
@@ -139,23 +139,26 @@ local function process()
 			-- remove the email from the mail_history (which is just a work table)
 			removeFromSet(mail_history, mailkey)
 		end
+
 	end
 
 	-- process emails not identified as coming from the auction house
 	for othermailkey, othermailvalue in pairs(other_mail_pre_process) do
 		-- parse only the attachments, as those are the only ones interesting
 		for attachmentkey, attachmentvalue in pairs(othermailvalue[4]) do
-			-- verify if the item is in the item_in_inventory database 
+			-- verify if the item is in the item_in_inventory database
 			if setContains(items_in_inventory, attachmentkey) then
 				-- check how many is already owned (some transformations are necessary to get the value
 				current_quantity = setContains(items_in_inventory, attachmentkey)
 				quantity = {attachmentvalue, current_quantity[2] + 1}
 				-- update the quantity
 				addToSet(items_in_inventory, attachmentkey, quantity)
+				removeFromSet(other_mail_pre_process, othermailkey)
 			else
 				-- set the quantity to 1 (assume stacks, not stacksize)
 				quantity = {attachmentvalue, 1}
 				addToSet(items_in_inventory, attachmentkey, quantity)
+				removeFromSet(other_mail_pre_process, othermailkey)
 			end
 		end
 		-- add email id to other_email database, so it doesn't get processed ever again.
@@ -163,13 +166,37 @@ local function process()
 	end
 
 	-- process emails comming from the auction house
-	for auctionkey, auctionvalue in pairs(auction_details_pre_process) do
-
+	for auctionkey, auctionvalue in pairs(auction_pre_process) do
+		print("----")
+		print(auctionkey)
+		-- parse the attachments
+		print(auctionvalue[1])
+		print(auctionvalue[2])
+		print(auctionvalue[3])
+		print(auctionvalue[4])
+		if auctionvalue[4] ~= nil then
+			for attachmentkey, attachmentvalue in pairs(auctionvalue[4]) do
+				-- verify if the item is in the item_in_inventory database
+				if setContains(items_in_inventory, attachmentkey) then
+					-- check how many is already owned (some transformations are necessary to get the value
+					current_quantity = setContains(items_in_inventory, attachmentkey)
+					quantity = {attachmentvalue, current_quantity[2] + 1}
+					-- update the quantity
+					addToSet(items_in_inventory, attachmentkey, quantity)
+				else
+					-- set the quantity to 1 (assume stacks, not stacksize)
+					quantity = {attachmentvalue, 1}
+					addToSet(items_in_inventory, attachmentkey, quantity)
+				end
+			end
+		end
+		-- add email id to auction_results database, so it doesn't get processed ever again.
+		addToSet(auction_results_db, auctionkey, auctionvalue)
 	end
 	print("Processing complete")
 end
 
--- Save the mail_history database
+-- Save the database
 local function settingssave()
 	mail_history_db = mail_history
 	auction_results_db = auction_results

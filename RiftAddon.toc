@@ -18,5 +18,6 @@ SavedVariables = {
 	mail_history_db = "character",
 	auction_results_db = "character",
 	other_mail_db = "character",
-	items_in_inventory_db = "character"
+	items_in_inventory_db = "character",
+	ongoing_auctions_db = "character"
 }
