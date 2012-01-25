@@ -96,104 +96,170 @@ end
 
 local function process()
 	print("Starting to process emails")
-	-- processing each email
-	for mailkey, mailvalue in pairs(mail_history) do
-		-- database that will hold all the data from the auction house results once parsed
-		auction_details_pre_process = {}
-		other_mail_pre_process = {}
-		-- list that will hold the attachments contained in the email
-		attachment_list = {}
-		i = 1
-		-- for each property of the email
-		for auctionkey, auctionvalue in pairs(mailvalue) do
-			-- store each property (from, subject, body, attachments)
-			switch(i) : caseof {
-			[1] = function()
-				table.insert(auction_details_pre_process, auctionvalue)
-			end,
-			[2] = function ()
-				table.insert(auction_details_pre_process, auctionvalue)
-			end,
-			[3] = function()
-				table.insert(auction_details_pre_process, auctionvalue)
-			end,
-			[4] = function()
-				-- parse through the attachment list (treat as a table in every case as the number can vary)
-				for attachmentkey, attachmentvalue in pairs(auctionvalue) do
-					table.insert(attachment_list, attachmentvalue)
+	if mail_history ~= {} and  mail_history ~= nil then
+		-- processing each email
+		for mailkey, mailvalue in pairs(mail_history) do
+			-- database that will hold all the data from the auction house results once parsed
+			auction_details_pre_process = {}
+			other_mail_pre_process = {}
+			-- list that will hold the attachments contained in the email
+			attachment_list = {}
+			i = 1
+			-- for each property of the email
+			for auctionkey, auctionvalue in pairs(mailvalue) do
+				-- store each property (from, subject, body, attachments)
+				switch(i) : caseof {
+				[1] = function()
+					table.insert(auction_details_pre_process, auctionvalue)
+				end,
+				[2] = function ()
+					table.insert(auction_details_pre_process, auctionvalue)
+				end,
+				[3] = function()
+					table.insert(auction_details_pre_process, auctionvalue)
+				end,
+				[4] = function()
+					-- parse through the attachment list (treat as a table in every case as the number can vary)
+					for attachmentkey, attachmentvalue in pairs(auctionvalue) do
+						table.insert(attachment_list, attachmentvalue)
+					end
+					table.insert(auction_details_pre_process, attachment_list) end,
+				}
+				i = i + 1
+			end
+
+			-- if the email comes from the auction house, store it and remove it from the email_history (to limit filesize)
+			if auction_details_pre_process[1] == "Auction House" then
+				if not setContains(auction_results, mailkey) then
+					addToSet(auction_pre_process, mailkey, auction_details_pre_process)
 				end
-				table.insert(auction_details_pre_process, attachment_list) end,
-			}
-			i = i + 1
-		end
-
-		-- if the email comes from the auction house, store it and remove it from the email_history (to limit filesize)
-		if auction_details_pre_process[1] == "Auction House" then
-			addToSet(auction_pre_process, mailkey, auction_details_pre_process)
-			removeFromSet(mail_history, mailkey)
-		else
-			-- we verify if the other_email has been parsed prior and if not add it to the list to parse
-			if not setContains(other_mail, mailkey) then
-				addToSet(other_mail_pre_process, mailkey, auction_details_pre_process)
-			end
-			-- remove the email from the mail_history (which is just a work table)
-			removeFromSet(mail_history, mailkey)
-		end
-
-	end
-
-	-- process emails not identified as coming from the auction house
-	for othermailkey, othermailvalue in pairs(other_mail_pre_process) do
-		-- parse only the attachments, as those are the only ones interesting
-		for attachmentkey, attachmentvalue in pairs(othermailvalue[4]) do
-			-- verify if the item is in the item_in_inventory database
-			if setContains(items_in_inventory, attachmentkey) then
-				-- check how many is already owned (some transformations are necessary to get the value
-				current_quantity = setContains(items_in_inventory, attachmentkey)
-				quantity = {attachmentvalue, current_quantity[2] + 1}
-				-- update the quantity
-				addToSet(items_in_inventory, attachmentkey, quantity)
-				removeFromSet(other_mail_pre_process, othermailkey)
+				removeFromSet(mail_history, mailkey)
 			else
-				-- set the quantity to 1 (assume stacks, not stacksize)
-				quantity = {attachmentvalue, 1}
-				addToSet(items_in_inventory, attachmentkey, quantity)
-				removeFromSet(other_mail_pre_process, othermailkey)
+				-- we verify if the other_email has been parsed prior and if not add it to the list to parse
+				if not setContains(other_mail, mailkey) then
+					addToSet(other_mail_pre_process, mailkey, auction_details_pre_process)
+				end
+				-- remove the email from the mail_history (which is just a work table)
+				removeFromSet(mail_history, mailkey)
 			end
-		end
-		-- add email id to other_email database, so it doesn't get processed ever again.
-		addToSet(other_mail, othermailkey, othermailvalue)
-	end
 
-	-- process emails comming from the auction house
-	for auctionkey, auctionvalue in pairs(auction_pre_process) do
-		print("----")
-		print(auctionkey)
-		-- parse the attachments
-		print(auctionvalue[1])
-		print(auctionvalue[2])
-		print(auctionvalue[3])
-		print(auctionvalue[4])
-		if auctionvalue[4] ~= nil then
-			for attachmentkey, attachmentvalue in pairs(auctionvalue[4]) do
+		end
+
+		-- process emails not identified as coming from the auction house
+		for othermailkey, othermailvalue in pairs(other_mail_pre_process) do
+			-- parse only the attachments, as those are the only ones interesting
+			for attachmentkey, attachmentvalue in pairs(othermailvalue[4]) do
 				-- verify if the item is in the item_in_inventory database
-				if setContains(items_in_inventory, attachmentkey) then
+				if setContains(items_in_inventory, attachmentvalue) then
 					-- check how many is already owned (some transformations are necessary to get the value
-					current_quantity = setContains(items_in_inventory, attachmentkey)
-					quantity = {attachmentvalue, current_quantity[2] + 1}
+					current_quantity = setContains(items_in_inventory, attachmentvalue)
+					quantity = {current_quantity[1] + 1}
 					-- update the quantity
-					addToSet(items_in_inventory, attachmentkey, quantity)
+					addToSet(items_in_inventory, attachmentvalue, quantity)
+					removeFromSet(other_mail_pre_process, othermailkey)
 				else
 					-- set the quantity to 1 (assume stacks, not stacksize)
-					quantity = {attachmentvalue, 1}
-					addToSet(items_in_inventory, attachmentkey, quantity)
+					quantity = {1}
+					addToSet(items_in_inventory, attachmentvalue, quantity)
+					removeFromSet(other_mail_pre_process, othermailkey)
 				end
 			end
+			-- add email id to other_email database, so it doesn't get processed ever again.
+			addToSet(other_mail, othermailkey, othermailvalue)
 		end
-		-- add email id to auction_results database, so it doesn't get processed ever again.
-		addToSet(auction_results_db, auctionkey, auctionvalue)
+
+		-- process emails comming from the auction house
+		for auctionkey, auctionvalue in pairs(auction_pre_process) do
+			auction_record = {}
+			-- setting default values
+			platinum = "0"
+			gold = "00"
+			silver = "00"
+			-- parse the attachments
+			subject = auctionvalue[2]
+			-- check if its Expired
+			if string.find(subject, "Auction Expired for ") ~= nil then
+				-- add the status
+				table.insert(auction_record, "Expired")
+				-- insert a "null" value as there is no profit
+				table.insert(auction_record, "")
+			end
+			-- Check if its Sold
+			if string.find(subject,"Auction Sold for ") ~= nil then
+				-- add the status
+				table.insert(auction_record, "Sold")
+				-- get the email content, in order to parse the profit made
+				body = auctionvalue[3]
+				-- define where to start and stop looking for
+				start_pos = string.find(body, "Bid: ")
+				end_pos =  string.find(body, "- Fee: ")
+				-- define the profit string
+				profit_string = string.sub(body, start_pos + 5, end_pos - 3 )
+
+				-- parsing each currency in order to get how much of each was got
+				plat_pos = string.find(profit_string, "platinum")
+				-- check if the currency was found
+				if plat_pos ~= nil then
+					-- extract the amount
+					platinum = string.sub(profit_string, 1, plat_pos -1)
+					-- remove extra " " (spaces
+					platinum = string.gsub(platinum, " ", "")
+				end
+
+				gold_pos = string.find(profit_string, "gold")
+				if gold_pos ~= nil then
+					gold = string.sub(profit_string, gold_pos -3, gold_pos -1)
+					gold = string.gsub(gold, " ", "")
+					-- if number is beloe 10, add a "0" so it doesn't "offset" the values
+					if tonumber(gold) < 10 then
+						gold = 0 .. gold
+					end
+				end
+
+				silver_pos = string.find(profit_string, "silver")
+				if silver_pos ~= nil then
+					silver = string.sub(profit_string, silver_pos -3, silver_pos -1)
+					silver = string.gsub(silver, " ", "")
+					if tonumber(silver) < 10 then
+						silver = 0 .. silver
+					end
+				end
+				-- add the final amount of the profit to the details of the transaction
+				table.insert(auction_record, platinum .. gold .. silver )
+			end
+			-- parsing the attachments
+			if auctionvalue[4] ~= nil then
+				for attachmentkey, attachmentvalue in pairs(auctionvalue[4]) do
+					-- verify if the item is in the item_in_inventory database
+					if auction_record[1] == "Expired" then
+						if setContains(items_in_inventory, attachmentvalue) then
+							-- check how many are already owned
+							current_quantity = setContains(items_in_inventory, attachmentvalue)
+							quantity = {current_quantity[1] + 1}
+							-- update the quantity
+							addToSet(items_in_inventory, attachmentvalue, quantity)
+							removeFromSet(auction_pre_process, auctionkey)
+						else
+							-- set the quantity to 1 (assume stacks, not stacksize)
+							quantity = {1}
+							addToSet(items_in_inventory, attachmentvalue, quantity)
+							removeFromSet(auction_pre_process, auctionkey)
+						end
+					end
+					table.insert(auction_record, attachmentvalue)
+				end
+			end
+			-- add a timestamp for the transaction
+			table.insert(auction_record, os.date("%c"))
+			-- add email id to auction_results database, so it doesn't get processed ever again. (Filter auctions won for now)
+			if string.find(subject, "Auction Won for ") == nil then
+				addToSet(auction_results, auctionkey, auction_record)
+			end
+		end
+		print("Processing complete")
+	else
+		print("You must parse the mailbox first (/aher mailbox)")
 	end
-	print("Processing complete")
 end
 
 -- Save the database

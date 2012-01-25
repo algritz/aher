@@ -4,7 +4,7 @@ Description = "Manipulating the AH"
 Author = "algritz@videotron.ca"
 Version = "0.0.1"
 Email = "algritz@videotron.ca"
-Environment = "1.6"
+Environment = "1.7"
 Embed = {
 	LibSimpleWidgets = true,
 }
