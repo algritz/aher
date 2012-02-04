@@ -17,7 +17,9 @@ RunOnStartup = {
 SavedVariables = {
 	mail_history_db = "character",
 	auction_results_db = "character",
-	other_mail_db = "character",
+	ongoing_auctions_db = "character",
+	prices_db = "character",
 	items_in_inventory_db = "character",
-	ongoing_auctions_db = "character"
+	sold_count_db =  "character",
+	expired_count_db =  "character"
 }
