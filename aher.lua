@@ -1,6 +1,3 @@
--- will store a temporary table to work with
-local auction_pre_process = {}
-
 -- Coroutines management table
 function SetupCoroutineTable()
 	coroutine_table = { };
@@ -85,18 +82,22 @@ end
 
 -- function that will take the specified attachment from the specified email
 local function take_attachment(auctionkey, attachmentvalue)
-	if not QueueStatus() then
-		Command.Mail.Take(auctionkey, attachmentvalue)
+	if Inspect.Mail.Detail(auctionkey) ~= nil then
+		if not QueueStatus() then
+			Command.Mail.Take(auctionkey, attachmentvalue)
+		else
+			take_attachment(auctionkey, attachmentvalue)
+		end
+		--print(Inspect.Mail.Detail(auctionkey)["attachments"][1])
+		if not Inspect.Mail.Detail(auctionkey)["attachments"] == attachmentvalue then
+			removeFromSet(ongoing_auctions, attachmentvalue)
+		end
 	else
-		take_attachment(auctionkey, attachmentvalue)
-	end
-
-	--print(Inspect.Mail.Detail(auctionkey)["attachments"][1])
-	if not Inspect.Mail.Detail(auctionkey)["attachments"][1] == attachmentvalue then
-		removeFromSet(ongoing_auctions, attachmentvalue)
+		return
 	end
 
 end
+
 
 -- function that will delete an email
 local function delete_email(auctionkey)
@@ -105,51 +106,106 @@ local function delete_email(auctionkey)
 	else
 		delete_email(auctionkey)
 	end
-	if Inspect.Mail.Detail(auctionkey) ~= nil then
-		print("Failed to delete email")
-		delete_email(auctionkey)
+end
+
+
+local function batch_delete_email()
+	if auction_results ~= {} and auction_results ~= nil then
+		for auctionkey, auctionvalue in pairs(auction_results) do
+			auction_record = {}
+			if Inspect.Mail.Detail(auctionkey) ~= nil then
+				delete_email(auctionkey)
+				Pause(1)
+			end
+		end
+	else
+		print("There were no mails from the Auction House to process")
 	end
+	print("Mailbox cleanup complete")
+	RemoveCoroutine(delete_coro)
 end
 
 -- output the content of the mail_history database
-local function mailstatus()
-	for k, v in pairs(auction_results) do
-		-- prints out the email ID
-		print ("#######################")
-		print(k)
-		-- index to determine what property will be printed
-		-- loops through the email attributes
-		for kd, vd in pairs(v) do
-			print(kd .. " : " .. tostring(vd))
+local function mailstatus(type_of_output)
+	switch(type_of_output) : caseof {
+	["auction"] = function ()
+		for k, v in pairs(auction_results) do
+			-- prints out the email ID
+			print ("#######################")
+			print ("Auction Results")
+			print ("#######################")
+			print(k)
+			-- index to determine what property will be printed
+			-- loops through the email attributes
+			for kd, vd in pairs(v) do
+				print(kd .. " : " .. tostring(vd))
+			end
 		end
-	end
-	print("---------------------------")
-	for k, v in pairs(auction_pre_process) do
-		-- prints out the email ID
-		print ("#######################")
-		print(k)
-		-- index to determine what property will be printed
-		-- loops through the email attributes
-		for kd, vd in pairs(v) do
-			print(kd .. " : " .. tostring(vd))
+	end,
+	["pre-auction"] = function ()
+		for k, v in pairs(auction_pre_process) do
+			-- prints out the email ID
+			print ("#######################")
+			print ("Auction Pre-Process")
+			print ("#######################")
+			print(k)
+			-- index to determine what property will be printed
+			-- loops through the email attributes
+			for kd, vd in pairs(v) do
+				print(kd .. " : " .. tostring(vd))
+			end
 		end
-	end
-	print("---------------------------")
+	end,
+	["mail"] =	function()
 		for k, v in pairs(mail_history) do
-		-- prints out the email ID
-		print ("#######################")
-		print(k)
-		-- index to determine what property will be printed
-		-- loops through the email attributes
-		for kd, vd in pairs(v) do
-			print(kd .. " : " .. tostring(vd))
+			-- prints out the email ID
+			print ("#######################")
+			print ("Mail History")
+			print ("#######################")
+			print(k)
+			-- index to determine what property will be printed
+			-- loops through the email attributes
+			for kd, vd in pairs(v) do
+				print(kd .. " : " .. tostring(vd))
+			end
 		end
-	end
+	end,
+	}
 	print("status report complete")
 end
 
+local function get_all_attachments()
+	-- process emails coming from the auction house
+	if auction_results ~= {} and auction_results ~= nil then
+		for auctionkey, auctionvalue in pairs(auction_results) do
+			if Inspect.Mail.Detail(auctionkey) ~= nil then
+				auction_record = {}
+				-- parsing the attachments
+				if auctionvalue[3] ~= nil then
+					-- verify if the item is in the item_in_inventory database
+					if find_free_space then
+						take_attachment(auctionkey, auctionvalue[3])
+						Pause(1)
+					end
+				else
+					print("should delete email (seen as empty)")
+					delete_email(auctionkey)
+					Pause(1)
+				end
+			end
+		end
+	else
+		print("There were no mails from the Auction House to process")
+	end
+	print("Processing complete")
+	RemoveCoroutine(attachment_coro)
+end
+
+
+
 local function process()
 	if mail_history ~= {} and  mail_history ~= nil then
+		print("mail history isn't empty")
 		-- processing each email
 		for mailkey, mailvalue in pairs(mail_history) do
 			-- database that will hold all the data from the auction house results once parsed
@@ -186,14 +242,12 @@ local function process()
 				end
 				removeFromSet(mail_history, mailkey)
 			end
-			print("Moved mail_history to auction_preprocess")
 		end
 
 		-- process emails coming from the auction house
 		if auction_pre_process ~= {} and auction_pre_process ~= nil then
 			for auctionkey, auctionvalue in pairs(auction_pre_process) do
 				auction_record = {}
-				not_processed_earlier = true
 				-- setting default values
 				platinum = "0"
 				gold = "00"
@@ -255,21 +309,6 @@ local function process()
 					print("There is an attachment")
 					for attachmentkey, attachmentvalue in pairs(auctionvalue[4]) do
 						-- verify if the item is in the item_in_inventory database
-						if auction_record[1] == "Expired" then
-							if find_free_space then
-								take_attachment(auctionkey, attachmentvalue)
-								Pause(1)
-								if Inspect.Mail.Detail(auctionkey)["attachments"][1] == nil then
-									print("should delete the following email:" .. auctionKey)
-									delete_email(auctionKey)
-									Pause(1)
-									removeFromSet(auction_pre_process, auctionkey)
-								else
-									print("failed to take attachment?")
-									print(Inspect.Mail.Detail(auctionkey)["attachments"][1])
-								end
-							end
-						end
 						if attachmentvalue ~= nil then
 							table.insert(auction_record, attachmentvalue)
 							if auction_record[1] == "Sold" then
@@ -308,10 +347,6 @@ local function process()
 							end
 						end
 					end
-				else
-					print("should delete email (seen as empty)")
-					delete_email(auctionkey)
-					Pause(1)
 				end
 				-- add a timestamp for the transaction
 				table.insert(auction_record, os.date("%c"))
@@ -327,8 +362,70 @@ local function process()
 	else
 		print("There was nothing to process \n You must parse the mailbox first (/aher mailbox)")
 	end
-	RemoveCoroutine(process_coro)
 end
+
+
+local function show_mailbox_window()
+	-- display the window
+	if mail_window then
+		aherMailUI:SetVisible(true)
+		mail_window:SetVisible(true)
+		return
+	end
+	-- creating the frame and setting attributes
+	mail_window = UI.CreateFrame("RiftWindow", "AHer", aherMailUI)
+	mail_window:SetWidth(350)
+	mail_window:SetHeight(150)
+	mail_window:SetTitle("AHer")
+	mail_window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 1125, 75)
+
+	-- storing window size for future usage
+	local l, t, r, b = mail_window:GetTrimDimensions()
+
+	-- creating the close button and setting its attributes
+	closebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	closebutton:SetSkin("close")
+	closebutton:SetPoint("TOPRIGHT", mail_window, "TOPRIGHT", r * -1 + 3, b + 2)
+	closebutton.Event.LeftPress = function() mail_window:SetVisible(false) end
+
+	-- creating the Read email button and setting its attributes
+	scanbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	scanbutton:SetText("Read Mails")
+	scanbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 55)
+	scanbutton.Event.LeftPress = function() launch_mailboxparser() end
+
+	-- creating the Process email button and setting its attributes
+	postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	postbutton:SetText("Process Mails")
+	postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 55)
+	postbutton.Event.LeftPress = function() process() end
+	-- creating the get attachments button and setting its attributes
+	postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	postbutton:SetText("Get Attachments")
+	postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 95)
+	postbutton.Event.LeftPress = function() launch_attachment_getter() end
+
+	-- creating the delete email button and setting its attributes
+	deletebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	deletebutton:SetText("Delete Emails")
+	deletebutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 95)
+	deletebutton.Event.LeftPress = function() launch_delete() end
+	--deletebutton.Event.LeftPress = function() batch_delete_email() end
+
+end
+
+local function isAtMail()
+	local status = Inspect.Interaction("mail")
+	if status then
+		show_mailbox_window()
+	else
+		if mail_window ~= nil then
+			aherMailUI:SetVisible(false)
+			mail_window:SetVisible(false)
+		end
+	end
+end
+
 
 local function mailboxparser()
 	local status = Inspect.Interaction("mail")
@@ -415,20 +512,30 @@ end
 
 local function post_item(item_id, time, value, value, x, y)
 	if not QueueStatus() then
-		print("inside_post handler")
 		Command.Auction.Post(item_id, time, value, value)
-		sleep(1)
-		print("after_post handler")
-		addToSet(ongoing_auctions, item_id)
-		addToSet(prices, value)
+		if setContains(ongoing_auctions, item_id) then
+			local quantity =  setContains(ongoing_auctions, item_id)
+			quantity = quantity + 1
+			addToSet(ongoing_auctions, item_id, quantity)
+		else
+			addToSet(ongoing_auctions, item_id, 1)
+		end
+		addToSet(prices, item_id, value)
 	else
+		Pause(1)
 		post_item(item_id, time, value, value, x, y)
 	end
-	current_slot = Utility.Item.Slot.Inventory(x,y)
-	item_id = Inspect.Item.List(current_slot)
-	if item_id ~= nil then
-		print("Posting failed, retrying")
-		post_item(item_id, time, value, value, x, y)
+end
+
+
+local function isThereCompetition(item_id)
+	for _, auctionid in ipairs(ah_results) do
+		auction_detail = Inspect.Auction.Detail(auctionid)
+		for key, value in ipairs(auction_detail) do
+			if auction_detail ~= {} then
+				print("there is competition")
+			end
+		end
 	end
 end
 
@@ -440,15 +547,35 @@ local function batch_post_items()
 			current_slot = Utility.Item.Slot.Inventory(x,y)
 			if (Inspect.Item.Detail(current_slot) and not Inspect.Item.Detail(current_slot)["bound"]) then
 				item_id = Inspect.Item.List(current_slot)
+				
+				isThereCompetition(item_id)
+				-- determining value to post for
+				local value = 0
+				if setContains(prices, Inspect.Item.Detail(current_slot)) ~= nil then
+					value = setContains(prices, Inspect.Item.Detail(current_slot))
+				else
+
+					if Inspect.Item.Detail(current_slot)["requiredLevel"] ~= nil then
+						local level = Inspect.Item.Detail(current_slot)["requiredLevel"]
+						value = Inspect.Item.Detail(current_slot)["sell"]
+						value = value * 15 * level
+					else
+						value = Inspect.Item.Detail(current_slot)["sell"]
+						value = value * 30
+					end
+				end
+				local deposit_cost = Utility.Auction.Cost(item_id, 12, value, value)
+				value = value + deposit_cost
 				-- posting the item
-				local value = Inspect.Item.Detail(current_slot)["sell"]
-				value = value * 30
-				print("before_post")
+				
+				
 				post_item(item_id, 12, value, value, x, y)
+				Pause(1)
 			end
 		end
 		starting_slot=1
 	end
+	RemoveCoroutine(post_coro)
 end
 
 
@@ -486,9 +613,22 @@ local function makewindow()
 	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
 	postbutton:SetText("Batch Post")
 	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 55)
-	postbutton.Event.LeftPress = function() batch_post_items() end
-
+	postbutton.Event.LeftPress = function() launch_post() end
+	--postbutton.Event.LeftPress = function() batch_post_items() end
 end
+
+local function isAtAH()
+	local status = Inspect.Interaction("auction")
+	if status then
+		makewindow()
+	else
+		if window ~= nil then
+			aherUI:SetVisible(false)
+			window:SetVisible(false)
+		end
+	end
+end
+
 
 -- Save the database
 local function settingssave()
@@ -509,6 +649,11 @@ local function settingsload()
 	else
 		print("loading mail history failed")
 		mail_history = {}
+	end
+	if auction_pre_process_db ~= nil then
+		auction_pre_process = auction_pre_process_db
+	else
+		auction_pre_process = {}
 	end
 	if auction_results_db ~= nil then
 		auction_results = auction_results_db
@@ -545,7 +690,7 @@ local function settingsload()
 end
 
 local function printhelp()
-	print("Available options are: \n mailbox : to parse the mailbox \n status : to get the current status \n save : to force saving of email database")
+	print("Available options are: \n status mail : to get the list of mails to process \n status pre : to get the list of auctions to process \n status auc : to get the list of processed auctions")
 end
 
 
@@ -587,6 +732,7 @@ function switch(c)
 end
 
 aherUI = UI.CreateContext("AHer")
+aherMailUI = UI.CreateContext("AHer")
 
 -- adding the event handler triggers to save/load the databases
 table.insert(Event.Addon.SavedVariables.Save.Begin, {function () settingssave() end, "aher", "Save variables"})
@@ -594,14 +740,8 @@ table.insert(Event.Addon.SavedVariables.Load.Begin, {function () settingsload() 
 table.insert(Event.Auction.Scan, {makewindow, "aher", "Process AH data"})
 table.insert(Event.Auction.Scan, {AHResults, "aher", "AHResults" })
 table.insert(Event.Queue.Status, {QueueStatus, "aher", "Queue Status"})
-
---local function Process_sample()
---	for i = 1, 5 do
---		print(i)
---		Pause(1)
---	end
---	RemoveCoroutine(coro)
---end
+table.insert(Event.System.Update.Begin, {function() isAtMail() end, "aher", "isAtMail" })
+table.insert(Event.System.Update.Begin, {function() isAtAH() end, "aher", "isAtAH" })
 
 SetupCoroutineTable()
 
@@ -612,21 +752,34 @@ function launch_mailboxparser()
 	AddCoroutine(parsing_coro)
 end
 
-function launch_processing()
+function launch_process()
 	process_coro = coroutine.create(process)
 	AddCoroutine(process_coro)
+end
+
+function launch_attachment_getter()
+	attachment_coro = coroutine.create(get_all_attachments)
+	AddCoroutine(attachment_coro)
+end
+
+
+function launch_post()
+	post_coro = coroutine.create(batch_post_items)
+	AddCoroutine(post_coro)
+end
+
+function launch_delete()
+	post_coro = coroutine.create(batch_delete_email)
+	AddCoroutine(delete_coro)
 end
 
 
 -- adding the slash commands parameters
 local function slashcommands(command)
 	switch(command) : caseof {
-	["mailbox"] = function() launch_mailboxparser() end,
-	["status"] = function () mailstatus("ah") end,
-	["save"] = function() settingssave() end,
-	["show"] = function() makewindow() end,
-	["process"] = function() launch_processing() end,
-	["dprocess"] = function() process() end,
+	["status auc"] = function () mailstatus("auction") end,
+	["status pre"] = function () mailstatus("pre-auction") end,
+	["status mail"] = function () mailstatus("mail") end,
 	default = function() printhelp() end,
 	}
 end
