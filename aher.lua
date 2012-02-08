@@ -1,3 +1,4 @@
+local ah_results = {}
 -- Coroutines management table
 function SetupCoroutineTable()
 	coroutine_table = { };
@@ -85,12 +86,11 @@ local function take_attachment(auctionkey, attachmentvalue)
 	if Inspect.Mail.Detail(auctionkey) ~= nil then
 		if not QueueStatus() then
 			Command.Mail.Take(auctionkey, attachmentvalue)
+			local quantity =  setContains(ongoing_auctions, attachmentvalue)
+			quantity = quantity - 1
+			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
 		else
 			take_attachment(auctionkey, attachmentvalue)
-		end
-		--print(Inspect.Mail.Detail(auctionkey)["attachments"][1])
-		if not Inspect.Mail.Detail(auctionkey)["attachments"] == attachmentvalue then
-			removeFromSet(ongoing_auctions, attachmentvalue)
 		end
 	else
 		return
@@ -115,14 +115,12 @@ local function batch_delete_email()
 			auction_record = {}
 			if Inspect.Mail.Detail(auctionkey) ~= nil then
 				delete_email(auctionkey)
-				Pause(1)
 			end
 		end
 	else
 		print("There were no mails from the Auction House to process")
 	end
 	print("Mailbox cleanup complete")
-	RemoveCoroutine(delete_coro)
 end
 
 -- output the content of the mail_history database
@@ -205,7 +203,6 @@ end
 
 local function process()
 	if mail_history ~= {} and  mail_history ~= nil then
-		print("mail history isn't empty")
 		-- processing each email
 		for mailkey, mailvalue in pairs(mail_history) do
 			-- database that will hold all the data from the auction house results once parsed
@@ -306,7 +303,6 @@ local function process()
 				end
 				-- parsing the attachments
 				if auctionvalue[4][1] ~= nil then
-					print("There is an attachment")
 					for attachmentkey, attachmentvalue in pairs(auctionvalue[4]) do
 						-- verify if the item is in the item_in_inventory database
 						if attachmentvalue ~= nil then
@@ -327,21 +323,21 @@ local function process()
 									amount = tonumber(platinum .. gold .. silver) * 1.1
 									addToSet(prices, attachmentvalue, amount)
 								end
-								addToSet(expired_count, attachmentvalue, 0)
+								addToSet(expired_count, Inspect.Item.Detail(attachmentvalue)["name"], 0)
 							else if auction_record[1] == "Expired" then
 									if setContains(expired_count, attachmentvalue) then
 										quantity = setContains(expired_count, attachmentvalue)
 										quantity = quantity + 1
-										addToSet(expired_count, attachmentvalue, quantity)
+										addToSet(expired_count, Inspect.Item.Detail(attachmentvalue)["name"], quantity)
 										if math.fmod(quantity, 5) == 0 then
-											if setContains(prices, attachmentvalue) then
-												amount = setContains(prices, attachmentvalue)
+											if setContains(prices, Inspect.Item.Detail(attachmentvalue)["name"]) then
+												amount = setContains(prices, Inspect.Item.Detail(attachmentvalue)["name"])
 												amount = amount * 0.97
-												addToSet(prices, attachmentvalue, amount)
+												addToSet(prices, Inspect.Item.Detail(attachmentvalue)["name"], amount)
 											end
 										end
 									else
-										addToSet(expired_count, attachmentvalue, 1)
+										addToSet(expired_count, Inspect.Item.Detail(attachmentvalue)["name"], 1)
 									end
 								end
 							end
@@ -409,8 +405,7 @@ local function show_mailbox_window()
 	deletebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
 	deletebutton:SetText("Delete Emails")
 	deletebutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 95)
-	deletebutton.Event.LeftPress = function() launch_delete() end
-	--deletebutton.Event.LeftPress = function() batch_delete_email() end
+	deletebutton.Event.LeftPress = function() batch_delete_email() end
 
 end
 
@@ -484,9 +479,17 @@ end
 
 
 local function AHResults(r1,r2)
-	ah_results = {}
+	
 	for k,v in pairs(r2) do
 		table.insert(ah_results, k)
+	end
+	items_listed = {}
+	for key, value in pairs(ah_results) do
+		auction_detail = Inspect.Auction.Detail(value)
+		addToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
+	end
+	if items_listed ~= {} then
+		print("scanning complete")
 	end
 end
 
@@ -501,7 +504,6 @@ local function scan_ah()
 			scan_params = {type="search"}
 			-- execute the scan
 			Command.Auction.Scan(scan_params)
-			table.foreach(ah_results, print)
 		else
 			print("Full Auction scan is queued, wait a little before scanning again")
 		end
@@ -513,14 +515,15 @@ end
 local function post_item(item_id, time, value, value, x, y)
 	if not QueueStatus() then
 		Command.Auction.Post(item_id, time, value, value)
-		if setContains(ongoing_auctions, item_id) then
-			local quantity =  setContains(ongoing_auctions, item_id)
+		local quantity = setContains(ongoing_auctions, item_id)
+		if quantity ~= nil then
 			quantity = quantity + 1
-			addToSet(ongoing_auctions, item_id, quantity)
+			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
 		else
-			addToSet(ongoing_auctions, item_id, 1)
+			print("no record of prior auction of this item")
+			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], 1)
 		end
-		addToSet(prices, item_id, value)
+		addToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
 	else
 		Pause(1)
 		post_item(item_id, time, value, value, x, y)
@@ -529,13 +532,11 @@ end
 
 
 local function isThereCompetition(item_id)
-	for _, auctionid in ipairs(ah_results) do
-		auction_detail = Inspect.Auction.Detail(auctionid)
-		for key, value in ipairs(auction_detail) do
-			if auction_detail ~= {} then
-				print("there is competition")
-			end
-		end
+	if setContains(items_listed, Inspect.Item.Detail(item_id)["name"]) ~= nil then
+		print("oh noes there is competition!")
+		return false
+	else
+		return true
 	end
 end
 
@@ -547,8 +548,7 @@ local function batch_post_items()
 			current_slot = Utility.Item.Slot.Inventory(x,y)
 			if (Inspect.Item.Detail(current_slot) and not Inspect.Item.Detail(current_slot)["bound"]) then
 				item_id = Inspect.Item.List(current_slot)
-				
-				isThereCompetition(item_id)
+				local post_is_not_undercut = isThereCompetition(item_id)
 				-- determining value to post for
 				local value = 0
 				if setContains(prices, Inspect.Item.Detail(current_slot)) ~= nil then
@@ -567,10 +567,13 @@ local function batch_post_items()
 				local deposit_cost = Utility.Auction.Cost(item_id, 12, value, value)
 				value = value + deposit_cost
 				-- posting the item
-				
-				
-				post_item(item_id, 12, value, value, x, y)
-				Pause(1)
+
+				if post_is_not_undercut then
+					post_item(item_id, 12, value, value, x, y)
+					Pause(1)
+				else
+					print("Was competition")
+				end
 			end
 		end
 		starting_slot=1
@@ -766,11 +769,6 @@ end
 function launch_post()
 	post_coro = coroutine.create(batch_post_items)
 	AddCoroutine(post_coro)
-end
-
-function launch_delete()
-	post_coro = coroutine.create(batch_delete_email)
-	AddCoroutine(delete_coro)
 end
 
 
