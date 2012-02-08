@@ -50,23 +50,25 @@ end
 
 -- function that verifies how much space is left in the bags
 local function find_free_space()
-	local free_slot = false
 	for x=1, 5 do
 		for y=1, bag_size(x) do
+			-- check the current slot "id" (bag, slot)
 			current_slot = Utility.Item.Slot.Inventory(x,y)
+			-- check if there is an item on that slot
 			current_item = Inspect.Item.Detail(current_slot)
-			print(current_item)
+			-- check if the slot is empty or not and return the appropriate value
 			if current_item == nil then
-				free_slot = true
+				return true
 			end
 		end
 	end
-	return free_slot
+	return false
 end
 
 -- function that check for the global queue status
 local queueStatus = false
 local function QueueStatus()
+	-- inspects the queue status
 	queueStatus = Inspect.Queue.Status("global")
 	if queueStatus then return end -- global queue is still backlogged, var is true so exit out
 	queueStatus = false
@@ -74,6 +76,7 @@ end
 
 -- small function that opens an email
 local function mailOpen(k)
+	-- check if teh queue is available before opening
 	if not QueueStatus() then
 		Command.Mail.Open(k)
 	else
@@ -308,36 +311,45 @@ local function process()
 						if attachmentvalue ~= nil then
 							table.insert(auction_record, attachmentvalue)
 							if auction_record[1] == "Sold" then
-								if setContains(sold_count, attachmentvalue) then
-									quantity = setContains(sold, attachmentvalue)
+								name_start_pos = string.find(subject,"Auction Sold for ")
+								item_name = string.sub(subject, name_start_pos + 17)
+								table.insert(auction_record, item_name)
+								if setContains(sold_count, item_name) then
+									quantity = setContains(sold, item_name)
 									quantity = quantity + 1
-									addToSet(sold_count, attachmentvalue, quantity)
+									addToSet(sold_count, item_name, quantity)
 								else
-									addToSet(sold_count, attachmentvalue, 1)
+									addToSet(sold_count, item_name, 1)
 								end
-								if setContains(prices, attachmentvalue) then
-									amount = setContains(prices, attachmentvalue)
+								if setContains(prices, item_name) then
+									amount = setContains(prices, item_name)
 									amount = amount * 1.1
-									addToSet(prices, attachmentvalue, amount)
+									amount =  math.ceil(amount)
+									addToSet(prices, item_name, amount)
 								else
 									amount = tonumber(platinum .. gold .. silver) * 1.1
-									addToSet(prices, attachmentvalue, amount)
+									amount =  math.ceil(amount)
+									addToSet(prices, item_name, amount)
 								end
-								addToSet(expired_count, Inspect.Item.Detail(attachmentvalue)["name"], 0)
+								addToSet(expired_count, item_name, 0)
 							else if auction_record[1] == "Expired" then
-									if setContains(expired_count, attachmentvalue) then
-										quantity = setContains(expired_count, attachmentvalue)
+									name_start_pos = string.find(subject,"Auction Expired for ")
+									item_name = string.sub(subject, name_start_pos + 20)
+									table.insert(auction_record, item_name)
+									if setContains(expired_count, item_name) then
+										quantity = setContains(expired_count, item_name)
 										quantity = quantity + 1
-										addToSet(expired_count, Inspect.Item.Detail(attachmentvalue)["name"], quantity)
+										addToSet(expired_count, item_name, quantity)
 										if math.fmod(quantity, 5) == 0 then
-											if setContains(prices, Inspect.Item.Detail(attachmentvalue)["name"]) then
-												amount = setContains(prices, Inspect.Item.Detail(attachmentvalue)["name"])
+											if setContains(prices, item_name) then
+												amount = setContains(prices, item_name)
 												amount = amount * 0.97
-												addToSet(prices, Inspect.Item.Detail(attachmentvalue)["name"], amount)
+												amount =  math.ceil(amount)
+												addToSet(prices, item_name, amount)
 											end
 										end
 									else
-										addToSet(expired_count, Inspect.Item.Detail(attachmentvalue)["name"], 1)
+										addToSet(expired_count, item_name, 1)
 									end
 								end
 							end
@@ -440,7 +452,7 @@ local function mailboxparser()
 			if not setContains(mail_history, k) or mail_history == {} then
 				-- open email to have access to details
 				mailOpen(k)
-				Pause(1)
+				Pause(0.2)
 				-- get details
 				details = (Inspect.Mail.Detail(k))
 				-- table that will store the mail content
@@ -479,7 +491,7 @@ end
 
 
 local function AHResults(r1,r2)
-	
+
 	for k,v in pairs(r2) do
 		table.insert(ah_results, k)
 	end
