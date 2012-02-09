@@ -1,4 +1,3 @@
-local ah_results = {}
 -- Coroutines management table
 function SetupCoroutineTable()
 	coroutine_table = { };
@@ -86,16 +85,41 @@ end
 
 -- function that will take the specified attachment from the specified email
 local function take_attachment(auctionkey, attachmentvalue)
+	-- make sure that the email still exists
 	if Inspect.Mail.Detail(auctionkey) ~= nil then
+		-- make sure that the queue is available to use
 		if not QueueStatus() then
-			Command.Mail.Take(auctionkey, attachmentvalue)
-			local quantity =  setContains(ongoing_auctions, attachmentvalue)
-			quantity = quantity - 1
-			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
+			-- store the email's details
+			local mail_details = Inspect.Mail.Detail(auctionkey)
+			local subject = mail_details["subject"]
+			-- assign a temp name, (will override later on)
+			local item_name = "temp_name"
+			-- check if this is either an Expired or a Sold auction
+			if  string.find(subject, "Auction Expired for ") ~= nil then
+				-- remove the attachment
+				Command.Mail.Take(auctionkey, attachmentvalue)
+				-- extract the item name
+				item_name = string.sub(subject, 21)
+			else
+				Command.Mail.Take(auctionkey, attachmentvalue)
+				item_name = string.sub(subject, 18)
+			end
+			-- extract the current ongoing auction count
+			local quantity =  setContains(ongoing_auctions, item_name)
+			-- lower the quantity by 1 or set it to 0 if it didn't exist before or was the last ongoing auction
+			if quantity ~= nil and quantity > 1 then
+				quantity = quantity - 1
+			else
+				quantity = 0
+			end
+			-- saves the new auction count
+			addToSet(ongoing_auctions, item_name, quantity)
 		else
+			-- queue wasn't available, recall it again
 			take_attachment(auctionkey, attachmentvalue)
 		end
 	else
+		-- mail didn't exist, so just exit
 		return
 	end
 
@@ -112,10 +136,13 @@ local function delete_email(auctionkey)
 end
 
 
+-- function that will try to delete every processed emails
 local function batch_delete_email()
 	if auction_results ~= {} and auction_results ~= nil then
+		-- loops throught every emails
 		for auctionkey, auctionvalue in pairs(auction_results) do
 			auction_record = {}
+			-- if the email still exists
 			if Inspect.Mail.Detail(auctionkey) ~= nil then
 				delete_email(auctionkey)
 			end
@@ -307,13 +334,17 @@ local function process()
 				-- parsing the attachments
 				if auctionvalue[4][1] ~= nil then
 					for attachmentkey, attachmentvalue in pairs(auctionvalue[4]) do
-						-- verify if the item is in the item_in_inventory database
+						-- make sure there is an attachment to the email
 						if attachmentvalue ~= nil then
+							-- store the attachment item_id
 							table.insert(auction_record, attachmentvalue)
+							-- if the auction is "sold"
 							if auction_record[1] == "Sold" then
+								-- extract the item's name
 								name_start_pos = string.find(subject,"Auction Sold for ")
 								item_name = string.sub(subject, name_start_pos + 17)
 								table.insert(auction_record, item_name)
+								-- increases the "sold" count
 								if setContains(sold_count, item_name) then
 									quantity = setContains(sold, item_name)
 									quantity = quantity + 1
@@ -331,15 +362,20 @@ local function process()
 									amount =  math.ceil(amount)
 									addToSet(prices, item_name, amount)
 								end
+								-- reset the expired count to 0
 								addToSet(expired_count, item_name, 0)
+							-- if it is expired then
 							else if auction_record[1] == "Expired" then
+									-- extract the item's name
 									name_start_pos = string.find(subject,"Auction Expired for ")
 									item_name = string.sub(subject, name_start_pos + 20)
 									table.insert(auction_record, item_name)
+									-- increase the expired count
 									if setContains(expired_count, item_name) then
 										quantity = setContains(expired_count, item_name)
 										quantity = quantity + 1
 										addToSet(expired_count, item_name, quantity)
+										-- if the expired count is a multiple of 5, lower the price by 3%
 										if math.fmod(quantity, 5) == 0 then
 											if setContains(prices, item_name) then
 												amount = setContains(prices, item_name)
@@ -411,6 +447,7 @@ local function show_mailbox_window()
 	postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
 	postbutton:SetText("Get Attachments")
 	postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 95)
+	--postbutton.Event.LeftPress = function() get_all_attachments() end
 	postbutton.Event.LeftPress = function() launch_attachment_getter() end
 
 	-- creating the delete email button and setting its attributes
@@ -421,6 +458,7 @@ local function show_mailbox_window()
 
 end
 
+-- function that will display / hide the mail managemetn window based on being at the mailbox or not
 local function isAtMail()
 	local status = Inspect.Interaction("mail")
 	if status then
@@ -434,6 +472,7 @@ local function isAtMail()
 end
 
 
+-- function that parses each email and store it in a emprary database for further processing
 local function mailboxparser()
 	local status = Inspect.Interaction("mail")
 	if status == true then
@@ -489,20 +528,28 @@ local function mailboxparser()
 end
 
 
-
+-- function that will store the results of any auction_house search 
 local function AHResults(r1,r2)
-
+	-- main table that will contain the "whole results"
+	ah_results = {}
 	for k,v in pairs(r2) do
 		table.insert(ah_results, k)
 	end
+	-- list that will conaitn only the auctions I listed
+	items_listed_by_me = {}
+	-- list that will contain the items that are listed (used to determine if there is competition or not)
 	items_listed = {}
+	-- fetching the player's name
+	local player_name = Inspect.Unit.Detail("player")["name"]
+	
 	for key, value in pairs(ah_results) do
 		auction_detail = Inspect.Auction.Detail(value)
+		if player_name == auction_detail["seller"] then
+			addToSet(items_listed_by_me, Inspect.Item.Detail(auction_detail["item"])["name"], value)
+		end
 		addToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
 	end
-	if items_listed ~= {} then
-		print("scanning complete")
-	end
+	
 end
 
 local function scan_ah()
@@ -532,7 +579,6 @@ local function post_item(item_id, time, value, value, x, y)
 			quantity = quantity + 1
 			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
 		else
-			print("no record of prior auction of this item")
 			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], 1)
 		end
 		addToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
@@ -545,13 +591,45 @@ end
 
 local function isThereCompetition(item_id)
 	if setContains(items_listed, Inspect.Item.Detail(item_id)["name"]) ~= nil then
-		print("oh noes there is competition!")
 		return false
 	else
 		return true
 	end
 end
 
+
+local function isAlreadyListed(item_id)
+	if setContains(items_listed_by_me, Inspect.Item.Detail(item_id)["name"]) ~= nil then
+		return false
+	else
+		return true
+	end
+end
+
+
+local function search_for_undercut(item_id)
+	if not QueueStatus() then
+		local item_name = Inspect.Item.Detail(item_id)["name"]
+		-- determine the type of search
+		local min_value = 99999999999999999999999
+		for key, auctionid in pairs(ah_results) do
+			local auction_details = Inspect.Auction.Detail(auctionid)
+			local value = auction_details["buyout"]
+			local player_name = Inspect.Unit.Detail("player")["name"]
+			if player_name ~= auction_details["seller"] then
+				if item_name == auction_details["name"] then
+					if value < min_value then
+						min_value = value
+					end
+				end
+			end
+		end
+		return min_value
+	else
+		search_for_undercut(item_id)
+	end
+
+end
 
 local function batch_post_items()
 	for x=1, 5 do
@@ -560,32 +638,52 @@ local function batch_post_items()
 			current_slot = Utility.Item.Slot.Inventory(x,y)
 			if (Inspect.Item.Detail(current_slot) and not Inspect.Item.Detail(current_slot)["bound"]) then
 				item_id = Inspect.Item.List(current_slot)
-				local post_is_not_undercut = isThereCompetition(item_id)
+				local stack_size = Inspect.Item.Detail(current_slot)["stack"]
 				-- determining value to post for
+				local status = "0"
 				local value = 0
-				if setContains(prices, Inspect.Item.Detail(current_slot)) ~= nil then
-					value = setContains(prices, Inspect.Item.Detail(current_slot))
-				else
+				local competition_not_found = isThereCompetition(item_id)
+				local already_listed = isAlreadyListed(item_id)
+				local undercut_price = nil
 
-					if Inspect.Item.Detail(current_slot)["requiredLevel"] ~= nil then
-						local level = Inspect.Item.Detail(current_slot)["requiredLevel"]
-						value = Inspect.Item.Detail(current_slot)["sell"]
-						value = value * 15 * level
+				if not competition_not_found then
+					undercut_price = search_for_undercut(item_id)
+				end
+				local not_posted_before = false
+				if setContains(prices, Inspect.Item.Detail(current_slot)["name"]) ~= nil then
+					value = setContains(prices, Inspect.Item.Detail(current_slot)["name"])
+				else
+					not_posted_before = true
+					status = "1"
+				end
+
+				if not already_listed then
+					status = "2"
+				end
+
+				local within_margin = true
+				if not not_posted_before and undercut_price ~= nil and status == 0 then
+					if (undercut_price / value) < 0.85 then
+						within_margin = false
+						value = undercut_price * 0.98
+						value = math.ceil(value)
 					else
-						value = Inspect.Item.Detail(current_slot)["sell"]
-						value = value * 30
+						status = "3"
 					end
 				end
-				local deposit_cost = Utility.Auction.Cost(item_id, 12, value, value)
-				value = value + deposit_cost
+				-- For the moment, do not * value by stack size as the final "amount" cannot tell the initial size of the stack
+				--value = value * stack_size
+				
 				-- posting the item
-
-				if post_is_not_undercut then
+				switch(status) : caseof {
+				["0"] = function ()
 					post_item(item_id, 12, value, value, x, y)
-					Pause(1)
-				else
-					print("Was competition")
-				end
+					--Pause(1)
+				end,
+				["1"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " wasn't posted before") end,
+				["2"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was already posted once") end,
+				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end
+				}
 			end
 		end
 		starting_slot=1
@@ -593,6 +691,27 @@ local function batch_post_items()
 	RemoveCoroutine(post_coro)
 end
 
+
+local function record_prices()
+	local full_scan_is_not_queued = Inspect.Queue.Status("auctionfullscan")
+	if full_scan_is_not_queued then
+		-- determine the type of search
+		scan_params = {type="mine"}
+		-- execute the scan
+		Command.Auction.Scan(scan_params)
+		for key, auctionid in pairs(ah_results) do
+			local auction_details = Inspect.Auction.Detail(auctionid)
+			local item_name = Inspect.Item.Detail(auction_details["item"])["name"]
+			local value = auction_details["buyout"]
+			if setContains(prices, item_name) == nil then
+				addToSet(prices, item_name, value)
+			end
+		end
+		print("Prices recorded sucessfully")
+	else
+		print("Full Auction scan is queued, wait a little before scanning again")
+	end
+end
 
 -- adding the main window
 local function makewindow()
@@ -605,7 +724,7 @@ local function makewindow()
 	-- creating the frame and setting attributes
 	window = UI.CreateFrame("RiftWindow", "AHer", aherUI)
 	window:SetWidth(350)
-	window:SetHeight(95)
+	window:SetHeight(145)
 	window:SetTitle("AHer")
 	window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 1125, 75)
 
@@ -628,8 +747,15 @@ local function makewindow()
 	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
 	postbutton:SetText("Batch Post")
 	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 55)
-	postbutton.Event.LeftPress = function() launch_post() end
-	--postbutton.Event.LeftPress = function() batch_post_items() end
+	--postbutton.Event.LeftPress = function() launch_post() end
+	postbutton.Event.LeftPress = function() batch_post_items() end
+
+	-- creating the post button and setting its attributes
+	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
+	postbutton:SetText("Record Prices")
+	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 95)
+	postbutton.Event.LeftPress = function() record_prices() end
+
 end
 
 local function isAtAH()
