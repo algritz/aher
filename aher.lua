@@ -1,3 +1,4 @@
+local debugMode = false
 -- Coroutines management table
 function SetupCoroutineTable()
 	coroutine_table = { };
@@ -346,7 +347,7 @@ local function process()
 								table.insert(auction_record, item_name)
 								-- increases the "sold" count
 								if setContains(sold_count, item_name) then
-									quantity = setContains(sold, item_name)
+									quantity = setContains(sold_count, item_name)
 									quantity = quantity + 1
 									addToSet(sold_count, item_name, quantity)
 								else
@@ -364,7 +365,7 @@ local function process()
 								end
 								-- reset the expired count to 0
 								addToSet(expired_count, item_name, 0)
-							-- if it is expired then
+								-- if it is expired then
 							else if auction_record[1] == "Expired" then
 									-- extract the item's name
 									name_start_pos = string.find(subject,"Auction Expired for ")
@@ -528,7 +529,7 @@ local function mailboxparser()
 end
 
 
--- function that will store the results of any auction_house search 
+-- function that will store the results of any auction_house search
 local function AHResults(r1,r2)
 	-- main table that will contain the "whole results"
 	ah_results = {}
@@ -541,7 +542,6 @@ local function AHResults(r1,r2)
 	items_listed = {}
 	-- fetching the player's name
 	local player_name = Inspect.Unit.Detail("player")["name"]
-	
 	for key, value in pairs(ah_results) do
 		auction_detail = Inspect.Auction.Detail(value)
 		if player_name == auction_detail["seller"] then
@@ -549,7 +549,7 @@ local function AHResults(r1,r2)
 		end
 		addToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
 	end
-	
+
 end
 
 local function scan_ah()
@@ -571,24 +571,34 @@ local function scan_ah()
 	end
 end
 
+-- function that posts an item for the specified values
 local function post_item(item_id, time, value, value, x, y)
+	-- check if queue is available
 	if not QueueStatus() then
+		-- posting the actual item
 		Command.Auction.Post(item_id, time, value, value)
-		local quantity = setContains(ongoing_auctions, item_id)
+		-- checking the quantity of ongoing auctions for that item
+		local quantity = setContains(ongoing_auctions, Inspect.Item.Detail(item_id)["name"])
+		-- increment the quantity
 		if quantity ~= nil then
 			quantity = quantity + 1
 			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
 		else
 			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], 1)
 		end
+		-- save the price
 		addToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
 	else
-		Pause(1)
+		-- check if debug mode is activated and pause if not in debug mode
+		if not debugMode then
+			Pause(1)
+		end
+		-- call the post method again, since queue was busy
 		post_item(item_id, time, value, value, x, y)
 	end
 end
 
-
+-- function that checks if the item is already found on the auction house or not
 local function isThereCompetition(item_id)
 	if setContains(items_listed, Inspect.Item.Detail(item_id)["name"]) ~= nil then
 		return false
@@ -597,7 +607,7 @@ local function isThereCompetition(item_id)
 	end
 end
 
-
+-- function that checks if the item is already listed by the player
 local function isAlreadyListed(item_id)
 	if setContains(items_listed_by_me, Inspect.Item.Detail(item_id)["name"]) ~= nil then
 		return false
@@ -606,15 +616,16 @@ local function isAlreadyListed(item_id)
 	end
 end
 
-
+-- function that finds the minimum price of and item on the AH
 local function search_for_undercut(item_id)
+	-- if the queue is available 
 	if not QueueStatus() then
 		local item_name = Inspect.Item.Detail(item_id)["name"]
 		-- determine the type of search
 		local min_value = 99999999999999999999999
 		for key, auctionid in pairs(ah_results) do
 			local auction_details = Inspect.Auction.Detail(auctionid)
-			local value = auction_details["buyout"]
+			local value = auction_details["bid"]
 			local player_name = Inspect.Unit.Detail("player")["name"]
 			if player_name ~= auction_details["seller"] then
 				if item_name == auction_details["name"] then
@@ -661,6 +672,11 @@ local function batch_post_items()
 					status = "2"
 				end
 
+				if stack_size ~= nil then
+					if stack_size > 1 then
+						status = "3"
+					end
+				end
 				local within_margin = true
 				if not not_posted_before and undercut_price ~= nil and status == 0 then
 					if (undercut_price / value) < 0.85 then
@@ -668,27 +684,32 @@ local function batch_post_items()
 						value = undercut_price * 0.98
 						value = math.ceil(value)
 					else
-						status = "3"
+						status = "4"
 					end
 				end
 				-- For the moment, do not * value by stack size as the final "amount" cannot tell the initial size of the stack
 				--value = value * stack_size
-				
+
 				-- posting the item
 				switch(status) : caseof {
 				["0"] = function ()
 					post_item(item_id, 12, value, value, x, y)
-					--Pause(1)
+					if not debugMode then
+						Pause(1)
+					end
 				end,
-				["1"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " wasn't posted before") end,
+				["1"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was never posted before, post manually and then record the prices") end,
 				["2"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was already posted once") end,
-				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end
+				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, split and post again") end,
+				["4"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end
 				}
 			end
 		end
 		starting_slot=1
 	end
-	RemoveCoroutine(post_coro)
+	if not debugMode then
+		RemoveCoroutine(post_coro)
+	end
 end
 
 
@@ -747,8 +768,8 @@ local function makewindow()
 	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
 	postbutton:SetText("Batch Post")
 	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 55)
-	--postbutton.Event.LeftPress = function() launch_post() end
-	postbutton.Event.LeftPress = function() batch_post_items() end
+	postbutton.Event.LeftPress = function() launch_post() end
+	--postbutton.Event.LeftPress = function() batch_post_items() end
 
 	-- creating the post button and setting its attributes
 	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
@@ -905,8 +926,12 @@ end
 
 
 function launch_post()
-	post_coro = coroutine.create(batch_post_items)
-	AddCoroutine(post_coro)
+	if not debugMode then
+		post_coro = coroutine.create(batch_post_items)
+		AddCoroutine(post_coro)
+	else
+		batch_post_items()
+	end
 end
 
 
@@ -916,6 +941,14 @@ local function slashcommands(command)
 	["status auc"] = function () mailstatus("auction") end,
 	["status pre"] = function () mailstatus("pre-auction") end,
 	["status mail"] = function () mailstatus("mail") end,
+	["debug on"] = function ()
+		debugMode = true
+		print("Debug mode activated")
+	end,
+	["debug off"] = function ()
+		debugMode = false
+		print("Debug mode deactivated")
+	end,
 	default = function() printhelp() end,
 	}
 end
