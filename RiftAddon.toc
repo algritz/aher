@@ -22,5 +22,9 @@ SavedVariables = {
 	prices_db = "character",
 	items_in_inventory_db = "character",
 	sold_count_db =  "character",
-	expired_count_db =  "character"
+	expired_count_db =  "character",
+	debugMode_settings =  "character",
+	auction_time_settings =  "character",
+	undercut_auctions_list_db = "character",
+	allow_to_undercut_settings = "character" 
 }

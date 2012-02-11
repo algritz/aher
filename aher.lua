@@ -1,4 +1,3 @@
-local debugMode = false
 -- Coroutines management table
 function SetupCoroutineTable()
 	coroutine_table = { };
@@ -354,10 +353,14 @@ local function process()
 									addToSet(sold_count, item_name, 1)
 								end
 								if setContains(prices, item_name) then
-									amount = setContains(prices, item_name)
-									amount = amount * 1.1
-									amount =  math.ceil(amount)
-									addToSet(prices, item_name, amount)
+									if not setContains(undercut_auctions_list, item_name) then
+										amount = setContains(prices, item_name)
+										amount = amount * 1.1
+										amount =  math.ceil(amount)
+										addToSet(prices, item_name, amount)
+									else
+										removeFromSet(undercut_auctions_list, item_name)
+									end
 								else
 									amount = tonumber(platinum .. gold .. silver) * 1.1
 									amount =  math.ceil(amount)
@@ -388,6 +391,9 @@ local function process()
 									else
 										addToSet(expired_count, item_name, 1)
 									end
+									if setContains(undercut_auctions_list, item_name) then
+										removeFromSet(undercut_auctions_list, item_name)
+									end
 								end
 							end
 						end
@@ -399,6 +405,7 @@ local function process()
 				if string.find(subject, "Auction Won for ") == nil and auction_record[4] ~= nil then
 					addToSet(auction_results, auctionkey, auction_record)
 				end
+				removeFromSet(auction_pre_process, auctionkey)
 			end
 		else
 			print("There were no mails from the Auction House to process")
@@ -549,7 +556,9 @@ local function AHResults(r1,r2)
 		end
 		addToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
 	end
-
+	if ah_results[1] ~= nil then
+		print("Scanning complete")
+	end
 end
 
 local function scan_ah()
@@ -572,7 +581,7 @@ local function scan_ah()
 end
 
 -- function that posts an item for the specified values
-local function post_item(item_id, time, value, value, x, y)
+local function post_item(item_id, time, value, value, x, y, price_is_undercut)
 	-- check if queue is available
 	if not QueueStatus() then
 		-- posting the actual item
@@ -586,15 +595,19 @@ local function post_item(item_id, time, value, value, x, y)
 		else
 			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], 1)
 		end
-		-- save the price
-		addToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
+		-- save the price if its not an undercut
+		if not price_is_undercut then
+			addToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
+		else
+			addToSet(undercut_auctions_list, Inspect.Item.Detail(item_id)["name"], value)
+		end
 	else
 		-- check if debug mode is activated and pause if not in debug mode
 		if not debugMode then
 			Pause(1)
 		end
 		-- call the post method again, since queue was busy
-		post_item(item_id, time, value, value, x, y)
+		post_item(item_id, time, value, value, x, y, price_is_undercut)
 	end
 end
 
@@ -618,17 +631,17 @@ end
 
 -- function that finds the minimum price of and item on the AH
 local function search_for_undercut(item_id)
-	-- if the queue is available 
+	-- if the queue is available
 	if not QueueStatus() then
 		local item_name = Inspect.Item.Detail(item_id)["name"]
+		local player_name = Inspect.Unit.Detail("player")["name"]
 		-- determine the type of search
-		local min_value = 99999999999999999999999
+		local min_value = 99999999
 		for key, auctionid in pairs(ah_results) do
 			local auction_details = Inspect.Auction.Detail(auctionid)
 			local value = auction_details["bid"]
-			local player_name = Inspect.Unit.Detail("player")["name"]
-			if player_name ~= auction_details["seller"] then
-				if item_name == auction_details["name"] then
+			if item_name == Inspect.Item.Detail(auction_details["item"])["name"] then
+				if player_name ~= auction_details["seller"] then
 					if value < min_value then
 						min_value = value
 					end
@@ -656,11 +669,19 @@ local function batch_post_items()
 				local competition_not_found = isThereCompetition(item_id)
 				local already_listed = isAlreadyListed(item_id)
 				local undercut_price = nil
+				local not_posted_before = false
+				local within_margin = true
+				local price_is_undercut = false
+
 
 				if not competition_not_found then
 					undercut_price = search_for_undercut(item_id)
+					if not allow_to_undercut then
+						status = "5"
+					end
 				end
-				local not_posted_before = false
+
+
 				if setContains(prices, Inspect.Item.Detail(current_slot)["name"]) ~= nil then
 					value = setContains(prices, Inspect.Item.Detail(current_slot)["name"])
 				else
@@ -672,17 +693,18 @@ local function batch_post_items()
 					status = "2"
 				end
 
-				if stack_size ~= nil then
+				if stack_size ~= nil and not not_posted_before then
 					if stack_size > 1 then
 						status = "3"
 					end
 				end
-				local within_margin = true
-				if not not_posted_before and undercut_price ~= nil and status == 0 then
-					if (undercut_price / value) < 0.85 then
+				if undercut_price ~= nil and status == "0" then
+					if (undercut_price / value) > 0.85 then
 						within_margin = false
 						value = undercut_price * 0.98
 						value = math.ceil(value)
+						value = value - 1
+						price_is_undercut = true
 					else
 						status = "4"
 					end
@@ -693,7 +715,7 @@ local function batch_post_items()
 				-- posting the item
 				switch(status) : caseof {
 				["0"] = function ()
-					post_item(item_id, 12, value, value, x, y)
+					post_item(item_id, auction_time, value, value, x, y, price_is_undercut)
 					if not debugMode then
 						Pause(1)
 					end
@@ -701,7 +723,8 @@ local function batch_post_items()
 				["1"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was never posted before, post manually and then record the prices") end,
 				["2"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was already posted once") end,
 				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, split and post again") end,
-				["4"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end
+				["4"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end,
+				["5"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was not posted as undercutting isn't activated") end
 				}
 			end
 		end
@@ -724,7 +747,7 @@ local function record_prices()
 			local auction_details = Inspect.Auction.Detail(auctionid)
 			local item_name = Inspect.Item.Detail(auction_details["item"])["name"]
 			local value = auction_details["buyout"]
-			if setContains(prices, item_name) == nil then
+			if setContains(prices, item_name) == nil and not setContains(undercut_auctions_list_db, item_name) then
 				addToSet(prices, item_name, value)
 			end
 		end
@@ -795,12 +818,17 @@ end
 -- Save the database
 local function settingssave()
 	mail_history_db = mail_history
+	auction_pre_process_db = auction_pre_process
 	auction_results_db = auction_results
 	items_in_inventory_db = items_in_inventory
 	prices_db = prices
 	ongoing_auctions_db = ongoing_auctions
 	sold_count_db = sold_count
 	expired_count_db = expired_count
+	debugMode_settings = debugMode
+	auction_time_settings = auction_time
+	allow_to_undercut_settings = allow_to_undercut
+	undercut_auctions_list_db = undercut_auctions_list
 end
 
 -- reload the settings database
@@ -849,10 +877,35 @@ local function settingsload()
 		print("loading expired count list failed")
 		expired_count = {}
 	end
+	if debugMode_settings ~= nil then
+		debugMode = debugMode_settings
+	else
+		print("loading debug mode status failed")
+		debugMode = false
+	end
+	if auction_time_settings ~= nil then
+		auction_time = auction_time_settings
+	else
+		print("loading auction time setting failed")
+		auction_time = 12
+	end
+	if allow_to_undercut_settings ~= nil then
+		allow_to_undercut = allow_to_undercut_settings
+	else
+		print("loading auction undercut setting failed")
+		allow_to_undercut = false
+	end
+	if undercut_auctions_list_db ~= nil then
+		undercut_auctions_list = undercut_auctions_list_db
+	else
+		print("loading auction undercut list failed")
+		undercut_auctions_list = {}
+	end
+
 end
 
 local function printhelp()
-	print("Available options are: \n status mail : to get the list of mails to process \n status pre : to get the list of auctions to process \n status auc : to get the list of processed auctions")
+	print("Available options are: \n status mail : to get the list of mails to process \n status pre : to get the list of auctions to process \n status auc : to get the list of processed auctions \n time (12,24,48): will post auctions for that duration \n debug: will activate some 'debug' features \n allow (on/off): turn on/off undercutting when posting")
 end
 
 
@@ -941,6 +994,18 @@ local function slashcommands(command)
 	["status auc"] = function () mailstatus("auction") end,
 	["status pre"] = function () mailstatus("pre-auction") end,
 	["status mail"] = function () mailstatus("mail") end,
+	["time 48"] = function ()
+		auction_time = 48
+		print("Auctions will be posted for 48 hours")
+	end,
+	["time 24"] = function ()
+		auction_time = 24
+		print("Auctions will be posted for 24 hours")
+	end,
+	["time 12"] = function ()
+		auction_time = 12
+		print("Auctions will be posted for 12 hours")
+	end,
 	["debug on"] = function ()
 		debugMode = true
 		print("Debug mode activated")
@@ -948,6 +1013,14 @@ local function slashcommands(command)
 	["debug off"] = function ()
 		debugMode = false
 		print("Debug mode deactivated")
+	end,
+	["allow off"] = function ()
+		allow_to_undercut = false
+		print("undercutting will not be allowed")
+	end,
+	["allow on"] = function ()
+		allow_to_undercut = true
+		print("undercutting will be allowed")
 	end,
 	default = function() printhelp() end,
 	}
