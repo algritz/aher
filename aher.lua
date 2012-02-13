@@ -1,20 +1,21 @@
+local splited_items = {}
 -- Coroutines management table
-function SetupCoroutineTable()
+local function SetupCoroutineTable()
 	coroutine_table = { };
 end
 
 -- adds a coroutine to the queue
-function AddCoroutine(Item)
+local function AddCoroutine(Item)
 	table.insert(coroutine_table, Item);
 end
 
 -- remove a coroutine to the queue
-function RemoveCoroutine(Index)
+local function RemoveCoroutine(Index)
 	table.remove(coroutine_table, Index);
 end
 
 -- resumes a coroutine while it is active
-function ResumeCoroutine(Index)
+local function ResumeCoroutine(Index)
 	Item = coroutine_table[Index];
 	if coroutine.status(Item) ~= 'dead' then
 		coroutine.resume(Item);
@@ -22,7 +23,7 @@ function ResumeCoroutine(Index)
 end
 
 -- loops through the coroutines lists and calls the resume handler
-function ResumeAllCoroutines()
+local function ResumeAllCoroutines()
 	-- make sure there is something to process
 	if coroutine_table ~= {} then
 		for Index,Item in ipairs(coroutine_table) do
@@ -32,6 +33,45 @@ function ResumeAllCoroutines()
 		return
 	end
 end
+
+
+-- These 3 functions will serve to manage the key / values we want to store in the databases (mail_history, auction_history)
+local function addToSet(set, key, value)
+	set[key] = value
+end
+
+local function removeFromSet(set, key)
+	set[key] = nil
+end
+
+local function setContains(set, key)
+	return set[key]
+end
+
+
+-- implementing a switch function as LUA doesn't offer it "out of the box"
+local function switch(c)
+	local swtbl = {
+	casevar = c,
+	caseof = function (self, code)
+		local f
+		if (self.casevar) then
+			f = code[self.casevar] or code.default
+		else
+			f = code.missing or code.default
+		end
+		if f then
+			if type(f)=="function" then
+				return f(self.casevar,self)
+			else
+				error("case "..tostring(self.casevar).." not a function")
+			end
+		end
+	end
+	}
+	return swtbl
+end
+
 
 -- pause timer
 function Pause(seconds)
@@ -79,6 +119,7 @@ local function mailOpen(k)
 	if not QueueStatus() then
 		Command.Mail.Open(k)
 	else
+		pause(0.2)
 		mailOpen(k)
 	end
 end
@@ -225,10 +266,9 @@ local function get_all_attachments()
 	else
 		print("There were no mails from the Auction House to process")
 	end
-	print("Processing complete")
+	print("Attachments taken")
 	RemoveCoroutine(attachment_coro)
 end
-
 
 
 local function process()
@@ -416,6 +456,79 @@ local function process()
 	end
 end
 
+local function launch_process()
+	process_coro = coroutine.create(process)
+	AddCoroutine(process_coro)
+end
+
+
+-- function that parses each email and store it in a emprary database for further processing
+local function mailboxparser()
+	print("Starting to read emails")
+	local status = Inspect.Interaction("mail")
+	if status == true then
+		-- get the list of email
+		mailList = Inspect.Mail.List()
+		-- checking how many email will be parsed (cannot  use table.getn, since this table contains key/values => only way is to iterate throught the table)
+		mail_number = 0
+		for k,v in pairs(mailList) do
+			mail_number = mail_number + 1
+		end
+		-- index that stores the nuber of processed emails
+		processed_mail_count = 1
+		-- fetch through each emails
+		for k, v in pairs(mailList) do
+			-- if email hasn't been parsed previously
+			if not setContains(mail_history, k) or mail_history == {} then
+				-- open email to have access to details
+				mailOpen(k)
+				Pause(0.2)
+				-- get details
+				details = (Inspect.Mail.Detail(k))
+				-- table that will store the mail content
+				mail_details = {}
+				-- feeding the table
+				table.insert(mail_details, details["from"])
+				table.insert(mail_details, details["subject"])
+				table.insert(mail_details, details["body"])
+				--table.insert(mail_details, os.date)
+				-- table that will contain teh attachment list if there is any
+				attachment_list = {}
+				-- detecty if the is any attachment
+				if tonumber(details["attachments"]) == nil and details["attachments"] ~= nil then
+					-- add item ids in a table
+					for ka, va in pairs(details["attachments"]) do
+						table.insert(attachment_list, va)
+					end
+				end
+				table.insert(mail_details, attachment_list)
+				-- detect if mail is actually "read" (only way to declare the mail as processed)
+				if details["body"] ~= nil then
+					addToSet(mail_history, k, mail_details)
+					processed_mail_count = processed_mail_count + 1
+				end
+
+				-- check if we're done processing
+				if mail_number == processed_mail_count then
+					print("Email recording complete: " .. processed_mail_count .. " entries saved")
+					RemoveCoroutine(parsing_coro)
+				end
+			end
+		end
+	end
+end
+
+
+
+local function launch_mailboxparser()
+	parsing_coro = coroutine.create(mailboxparser)
+	AddCoroutine(parsing_coro)
+end
+
+local function launch_attachment_getter()
+	attachment_coro = coroutine.create(get_all_attachments)
+	AddCoroutine(attachment_coro)
+end
 
 local function show_mailbox_window()
 	-- display the window
@@ -475,62 +588,6 @@ local function isAtMail()
 		if mail_window ~= nil then
 			aherMailUI:SetVisible(false)
 			mail_window:SetVisible(false)
-		end
-	end
-end
-
-
--- function that parses each email and store it in a emprary database for further processing
-local function mailboxparser()
-	local status = Inspect.Interaction("mail")
-	if status == true then
-		-- get the list of email
-		mailList = Inspect.Mail.List()
-		-- checking how many email will be parsed (cannot  use table.getn, since this table contains key/values => only way is to iterate throught the table)
-		mail_number = 0
-		for k,v in pairs(mailList) do
-			mail_number = mail_number + 1
-		end
-		-- index that stores the nuber of processed emails
-		processed_mail_count = 1
-		-- fetch through each emails
-		for k, v in pairs(mailList) do
-			-- if email hasn't been parsed previously
-			if not setContains(mail_history, k) or mail_history == {} then
-				-- open email to have access to details
-				mailOpen(k)
-				Pause(0.2)
-				-- get details
-				details = (Inspect.Mail.Detail(k))
-				-- table that will store the mail content
-				mail_details = {}
-				-- feeding the table
-				table.insert(mail_details, details["from"])
-				table.insert(mail_details, details["subject"])
-				table.insert(mail_details, details["body"])
-				--table.insert(mail_details, os.date)
-				-- table that will contain teh attachment list if there is any
-				attachment_list = {}
-				-- detecty if the is any attachment
-				if tonumber(details["attachments"]) == nil and details["attachments"] ~= nil then
-					-- add item ids in a table
-					for ka, va in pairs(details["attachments"]) do
-						table.insert(attachment_list, va)
-					end
-				end
-				table.insert(mail_details, attachment_list)
-				-- detect if mail is actually "read" (only way to declare the mail as processed)
-				if details["body"] ~= nil then
-					addToSet(mail_history, k, mail_details)
-					processed_mail_count = processed_mail_count + 1
-				end
-
-				-- check if we're done processing
-				if mail_number == processed_mail_count then
-					print("Email recording complete: " .. processed_mail_count .. " entries saved")
-					RemoveCoroutine(parsing_coro)
-				end
-			end
 		end
 	end
 end
@@ -695,7 +752,17 @@ local function batch_post_items()
 
 				if stack_size ~= nil and not not_posted_before then
 					if stack_size > 1 then
-						status = "3"
+						if status == "0" then
+							if setContains(splited_items, Inspect.Item.Detail(item_id)["name"]) == nil then
+								addToSet(splited_items, Inspect.Item.Detail(item_id)["name"], 1)
+								Command.Item.Split(item_id, 1)
+								status = "6"
+							end
+						else
+							if already_listed then
+								status = "3"
+							end
+						end
 					end
 				end
 				if undercut_price ~= nil and status == "0" then
@@ -715,22 +782,30 @@ local function batch_post_items()
 				-- posting the item
 				switch(status) : caseof {
 				["0"] = function ()
-					post_item(item_id, auction_time, value, value, x, y, price_is_undercut)
+					local stack_size = Inspect.Item.Detail(current_slot)["stack"]
+					if stack_size == 1 then
+						post_item(item_id, auction_time, value, value, x, y, price_is_undercut)
+						if setContains(splited_items, item_id) then
+						removeFromSet(splited_items, Inspect.Item.Detail(item_id)["name"])
+					end
+					end
 					if not debugMode then
 						Pause(1)
 					end
 				end,
 				["1"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was never posted before, post manually and then record the prices") end,
 				["2"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was already posted once") end,
-				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, split and post again") end,
+				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, but item is already posted") end,
 				["4"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end,
-				["5"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was not posted as undercutting isn't activated") end
+				["5"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was not posted as undercutting isn't activated") end,
+				["6"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, it was splited, try to post again") end
 				}
 			end
 		end
 		starting_slot=1
 	end
 	if not debugMode then
+		print("Posting complete")
 		RemoveCoroutine(post_coro)
 	end
 end
@@ -756,6 +831,18 @@ local function record_prices()
 		print("Full Auction scan is queued, wait a little before scanning again")
 	end
 end
+
+
+local function launch_post()
+	if not debugMode then
+		post_coro = coroutine.create(batch_post_items)
+		AddCoroutine(post_coro)
+	else
+		batch_post_items()
+	end
+end
+
+
 
 -- adding the main window
 local function makewindow()
@@ -909,42 +996,7 @@ local function printhelp()
 end
 
 
--- These 3 functions will serve to manage the key / values we want to store in the databases (mail_history, auction_history)
-function addToSet(set, key, value)
-	set[key] = value
-end
 
-function removeFromSet(set, key)
-	set[key] = nil
-end
-
-function setContains(set, key)
-	return set[key]
-end
-
-
--- implementing a switch function as LUA doesn't offer it "out of the box"
-function switch(c)
-	local swtbl = {
-	casevar = c,
-	caseof = function (self, code)
-		local f
-		if (self.casevar) then
-			f = code[self.casevar] or code.default
-		else
-			f = code.missing or code.default
-		end
-		if f then
-			if type(f)=="function" then
-				return f(self.casevar,self)
-			else
-				error("case "..tostring(self.casevar).." not a function")
-			end
-		end
-	end
-	}
-	return swtbl
-end
 
 aherUI = UI.CreateContext("AHer")
 aherMailUI = UI.CreateContext("AHer")
@@ -961,32 +1013,6 @@ table.insert(Event.System.Update.Begin, {function() isAtAH() end, "aher", "isAtA
 SetupCoroutineTable()
 
 table.insert(Event.System.Update.Begin, {function() ResumeAllCoroutines() end, "aher", "OnUpdate" })
-
-function launch_mailboxparser()
-	parsing_coro = coroutine.create(mailboxparser)
-	AddCoroutine(parsing_coro)
-end
-
-function launch_process()
-	process_coro = coroutine.create(process)
-	AddCoroutine(process_coro)
-end
-
-function launch_attachment_getter()
-	attachment_coro = coroutine.create(get_all_attachments)
-	AddCoroutine(attachment_coro)
-end
-
-
-function launch_post()
-	if not debugMode then
-		post_coro = coroutine.create(batch_post_items)
-		AddCoroutine(post_coro)
-	else
-		batch_post_items()
-	end
-end
-
 
 -- adding the slash commands parameters
 local function slashcommands(command)
