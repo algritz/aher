@@ -36,21 +36,21 @@ end
 
 
 -- These 3 functions will serve to manage the key / values we want to store in the databases (mail_history, auction_history)
-local function addToSet(set, key, value)
+local function AddToSet(set, key, value)
 	set[key] = value
 end
 
-local function removeFromSet(set, key)
+local function RemoveFromSet(set, key)
 	set[key] = nil
 end
 
-local function setContains(set, key)
+local function SetContains(set, key)
 	return set[key]
 end
 
 
 -- implementing a switch function as LUA doesn't offer it "out of the box"
-local function switch(c)
+local function Switch(c)
 	local swtbl = {
 	casevar = c,
 	caseof = function (self, code)
@@ -82,19 +82,19 @@ function Pause(seconds)
 end
 
 -- function that returns the size of a bag
-local function get_bag_size(bag_number)
-	bag_size = Inspect.Item.Detail(Utility.Item.Slot.Inventory("bag",bag_number))["slots"]
+local function GetBagSize(bag_number)
+	local bag_size = Inspect.Item.Detail(Utility.Item.Slot.Inventory("bag",bag_number))["slots"]
 	return bag_size
 end
 
 -- function that verifies how much space is left in the bags
-local function find_free_space()
+local function FindFreeSpace()
 	for x=1, 5 do
-		for y=1, bag_size(x) do
+		for y=1, GetBagSize(x) do
 			-- check the current slot "id" (bag, slot)
-			current_slot = Utility.Item.Slot.Inventory(x,y)
+			local current_slot = Utility.Item.Slot.Inventory(x,y)
 			-- check if there is an item on that slot
-			current_item = Inspect.Item.Detail(current_slot)
+			local current_item = Inspect.Item.Detail(current_slot)
 			-- check if the slot is empty or not and return the appropriate value
 			if current_item == nil then
 				return true
@@ -106,7 +106,7 @@ end
 
 -- function that check for the global queue status
 local queueStatus = false
-local function QueueStatus()
+local function CheckForQueueStatus()
 	-- inspects the queue status
 	queueStatus = Inspect.Queue.Status("global")
 	if queueStatus then return end -- global queue is still backlogged, var is true so exit out
@@ -114,22 +114,22 @@ local function QueueStatus()
 end
 
 -- small function that opens an email
-local function mailOpen(k)
-	-- check if teh queue is available before opening
-	if not QueueStatus() then
+local function MailOpen(k)
+	-- check if the queue is available before opening
+	if not queueStatus then
 		Command.Mail.Open(k)
 	else
 		pause(0.2)
-		mailOpen(k)
+		MailOpen(k)
 	end
 end
 
 -- function that will take the specified attachment from the specified email
-local function take_attachment(auctionkey, attachmentvalue)
+local function TakeAttachment(auctionkey, attachmentvalue)
 	-- make sure that the email still exists
 	if Inspect.Mail.Detail(auctionkey) ~= nil then
 		-- make sure that the queue is available to use
-		if not QueueStatus() then
+		if not queueStatus then
 			-- store the email's details
 			local mail_details = Inspect.Mail.Detail(auctionkey)
 			local subject = mail_details["subject"]
@@ -146,7 +146,7 @@ local function take_attachment(auctionkey, attachmentvalue)
 				item_name = string.sub(subject, 18)
 			end
 			-- extract the current ongoing auction count
-			local quantity =  setContains(ongoing_auctions, item_name)
+			local quantity =  SetContains(ongoing_auctions, item_name)
 			-- lower the quantity by 1 or set it to 0 if it didn't exist before or was the last ongoing auction
 			if quantity ~= nil and quantity > 1 then
 				quantity = quantity - 1
@@ -154,10 +154,10 @@ local function take_attachment(auctionkey, attachmentvalue)
 				quantity = 0
 			end
 			-- saves the new auction count
-			addToSet(ongoing_auctions, item_name, quantity)
+			AddToSet(ongoing_auctions, item_name, quantity)
 		else
 			-- queue wasn't available, recall it again
-			take_attachment(auctionkey, attachmentvalue)
+			TakeAttachment(auctionkey, attachmentvalue)
 		end
 	else
 		-- mail didn't exist, so just exit
@@ -168,24 +168,24 @@ end
 
 
 -- function that will delete an email
-local function delete_email(auctionkey)
-	if not QueueStatus() then
+local function DeleteEmail(auctionkey)
+	if not queueStatus then
 		Command.Mail.Delete(auctionkey)
 	else
-		delete_email(auctionkey)
+		DeleteEmail(auctionkey)
 	end
 end
 
 
 -- function that will try to delete every processed emails
-local function batch_delete_email()
+local function BatchDeleteEmail()
 	if auction_results ~= {} and auction_results ~= nil then
 		-- loops throught every emails
 		for auctionkey, auctionvalue in pairs(auction_results) do
 			auction_record = {}
 			-- if the email still exists
 			if Inspect.Mail.Detail(auctionkey) ~= nil then
-				delete_email(auctionkey)
+				DeleteEmail(auctionkey)
 			end
 		end
 	else
@@ -195,8 +195,8 @@ local function batch_delete_email()
 end
 
 -- output the content of the mail_history database
-local function mailstatus(type_of_output)
-	switch(type_of_output) : caseof {
+local function MailStatus(type_of_output)
+	Switch(type_of_output) : caseof {
 	["auction"] = function ()
 		for k, v in pairs(auction_results) do
 			-- prints out the email ID
@@ -243,23 +243,22 @@ local function mailstatus(type_of_output)
 	print("status report complete")
 end
 
-local function get_all_attachments()
+local function GetAllAttachments()
 	-- process emails coming from the auction house
 	if auction_results ~= {} and auction_results ~= nil then
 		for auctionkey, auctionvalue in pairs(auction_results) do
 			if Inspect.Mail.Detail(auctionkey) ~= nil then
-				auction_record = {}
 				-- parsing the attachments
 				if auctionvalue[3] ~= nil then
 					-- verify if the item is in the item_in_inventory database
-					if find_free_space then
-						take_attachment(auctionkey, auctionvalue[3])
-						Pause(1)
+					if FindFreeSpace then
+						TakeAttachment(auctionkey, auctionvalue[3])
+						Pause(0.2)
 					end
 				else
 					print("should delete email (seen as empty)")
-					delete_email(auctionkey)
-					Pause(1)
+					DeleteEmail(auctionkey)
+					Pause(0.2)
 				end
 			end
 		end
@@ -271,19 +270,19 @@ local function get_all_attachments()
 end
 
 
-local function process()
-	if mail_history ~= {} and  mail_history ~= nil then
+local function Process()
+	if mail_history ~= {} and mail_history ~= nil then
 		-- processing each email
 		for mailkey, mailvalue in pairs(mail_history) do
 			-- database that will hold all the data from the auction house results once parsed
 			auction_details_pre_process = {}
 			-- list that will hold the attachments contained in the email
-			attachment_list = {}
-			i = 1
+			local attachment_list = {}
+			local i = 1
 			-- for each property of the email
 			for auctionkey, auctionvalue in pairs(mailvalue) do
 				-- store each property (from, subject, body, attachments)
-				switch(i) : caseof {
+				Switch(i) : caseof {
 				[1] = function()
 					table.insert(auction_details_pre_process, auctionvalue)
 				end,
@@ -304,23 +303,24 @@ local function process()
 			end
 			-- if the email comes from the auction house, store it and remove it from the email_history (to limit filesize)
 			if auction_details_pre_process[1] == "Auction House" then
-				if not setContains(auction_results, mailkey) then
-					addToSet(auction_pre_process, mailkey, auction_details_pre_process)
+				if SetContains(auction_results, mailkey) == nil then
+					AddToSet(auction_pre_process, mailkey, auction_details_pre_process)
+				else
+					print("Warning: That mail has already been processed: " .. mailkey)
 				end
-				removeFromSet(mail_history, mailkey)
+				RemoveFromSet(mail_history, mailkey)
 			end
 		end
-
 		-- process emails coming from the auction house
 		if auction_pre_process ~= {} and auction_pre_process ~= nil then
 			for auctionkey, auctionvalue in pairs(auction_pre_process) do
 				auction_record = {}
 				-- setting default values
-				platinum = "0"
-				gold = "00"
-				silver = "00"
+				local platinum = "0"
+				local gold = "00"
+				local silver = "00"
 				-- parse the attachments
-				subject = auctionvalue[2]
+				local subject = auctionvalue[2]
 				-- check if its Expired
 				if string.find(subject, "Auction Expired for ") ~= nil then
 					-- add the status
@@ -333,15 +333,15 @@ local function process()
 					-- add the status
 					table.insert(auction_record, "Sold")
 					-- get the email content, in order to parse the profit made
-					body = auctionvalue[3]
+					local body = auctionvalue[3]
 					-- define where to start and stop looking for
-					start_pos = string.find(body, "Bid: ")
-					end_pos =  string.find(body, "- Fee: ")
+					local start_pos = string.find(body, "Bid: ")
+					local end_pos =  string.find(body, "- Fee: ")
 					-- define the profit string
-					profit_string = string.sub(body, start_pos + 5, end_pos - 3 )
+					local profit_string = string.sub(body, start_pos + 5, end_pos - 3 )
 
 					-- parsing each currency in order to get how much of each was got
-					plat_pos = string.find(profit_string, "platinum")
+					local plat_pos = string.find(profit_string, "platinum")
 					-- check if the currency was found
 					if plat_pos ~= nil then
 						-- extract the amount
@@ -350,7 +350,7 @@ local function process()
 						platinum = string.gsub(platinum, " ", "")
 					end
 
-					gold_pos = string.find(profit_string, "gold")
+					local gold_pos = string.find(profit_string, "gold")
 					if gold_pos ~= nil then
 						gold = string.sub(profit_string, gold_pos -3, gold_pos -1)
 						gold = string.gsub(gold, " ", "")
@@ -360,7 +360,7 @@ local function process()
 						end
 					end
 
-					silver_pos = string.find(profit_string, "silver")
+					local silver_pos = string.find(profit_string, "silver")
 					if silver_pos ~= nil then
 						silver = string.sub(profit_string, silver_pos -3, silver_pos -1)
 						silver = string.gsub(silver, " ", "")
@@ -381,58 +381,58 @@ local function process()
 							-- if the auction is "sold"
 							if auction_record[1] == "Sold" then
 								-- extract the item's name
-								name_start_pos = string.find(subject,"Auction Sold for ")
-								item_name = string.sub(subject, name_start_pos + 17)
+								local name_start_pos = string.find(subject,"Auction Sold for ")
+								local item_name = string.sub(subject, name_start_pos + 17)
 								table.insert(auction_record, item_name)
 								-- increases the "sold" count
-								if setContains(sold_count, item_name) then
-									quantity = setContains(sold_count, item_name)
+								if SetContains(sold_count, item_name) then
+									local quantity = SetContains(sold_count, item_name)
 									quantity = quantity + 1
-									addToSet(sold_count, item_name, quantity)
+									AddToSet(sold_count, item_name, quantity)
 								else
-									addToSet(sold_count, item_name, 1)
+									AddToSet(sold_count, item_name, 1)
 								end
-								if setContains(prices, item_name) then
-									if not setContains(undercut_auctions_list, item_name) then
-										amount = setContains(prices, item_name)
+								if SetContains(prices, item_name) then
+									if not SetContains(undercut_auctions_list, item_name) then
+										local amount = SetContains(prices, item_name)
 										amount = amount * 1.1
 										amount =  math.ceil(amount)
-										addToSet(prices, item_name, amount)
+										AddToSet(prices, item_name, amount)
 									else
-										removeFromSet(undercut_auctions_list, item_name)
+										RemoveFromSet(undercut_auctions_list, item_name)
 									end
 								else
-									amount = tonumber(platinum .. gold .. silver) * 1.1
+									local amount = tonumber(platinum .. gold .. silver) * 1.1
 									amount =  math.ceil(amount)
-									addToSet(prices, item_name, amount)
+									AddToSet(prices, item_name, amount)
 								end
 								-- reset the expired count to 0
-								addToSet(expired_count, item_name, 0)
+								AddToSet(expired_count, item_name, 0)
 								-- if it is expired then
 							else if auction_record[1] == "Expired" then
 									-- extract the item's name
-									name_start_pos = string.find(subject,"Auction Expired for ")
-									item_name = string.sub(subject, name_start_pos + 20)
+									local name_start_pos = string.find(subject,"Auction Expired for ")
+									local item_name = string.sub(subject, name_start_pos + 20)
 									table.insert(auction_record, item_name)
 									-- increase the expired count
-									if setContains(expired_count, item_name) then
-										quantity = setContains(expired_count, item_name)
+									if SetContains(expired_count, item_name) then
+										local quantity = SetContains(expired_count, item_name)
 										quantity = quantity + 1
-										addToSet(expired_count, item_name, quantity)
+										AddToSet(expired_count, item_name, quantity)
 										-- if the expired count is a multiple of 5, lower the price by 3%
 										if math.fmod(quantity, 5) == 0 then
-											if setContains(prices, item_name) then
-												amount = setContains(prices, item_name)
+											if SetContains(prices, item_name) then
+												local amount = SetContains(prices, item_name)
 												amount = amount * 0.97
 												amount =  math.ceil(amount)
-												addToSet(prices, item_name, amount)
+												AddToSet(prices, item_name, amount)
 											end
 										end
 									else
-										addToSet(expired_count, item_name, 1)
+										AddToSet(expired_count, item_name, 1)
 									end
-									if setContains(undercut_auctions_list, item_name) then
-										removeFromSet(undercut_auctions_list, item_name)
+									if SetContains(undercut_auctions_list, item_name) then
+										RemoveFromSet(undercut_auctions_list, item_name)
 									end
 								end
 							end
@@ -443,9 +443,9 @@ local function process()
 				table.insert(auction_record, os.date("%c"))
 				-- add email id to auction_results database, so it doesn't get processed ever again. (Filter auctions won for now)
 				if string.find(subject, "Auction Won for ") == nil and auction_record[4] ~= nil then
-					addToSet(auction_results, auctionkey, auction_record)
+					AddToSet(auction_results, auctionkey, auction_record)
 				end
-				removeFromSet(auction_pre_process, auctionkey)
+				RemoveFromSet(auction_pre_process, auctionkey)
 			end
 		else
 			print("There were no mails from the Auction House to process")
@@ -456,44 +456,44 @@ local function process()
 	end
 end
 
-local function launch_process()
+local function LaunchProcess()
 	process_coro = coroutine.create(process)
 	AddCoroutine(process_coro)
 end
 
 
 -- function that parses each email and store it in a emprary database for further processing
-local function mailboxparser()
+local function MailboxParser()
 	print("Starting to read emails")
 	local status = Inspect.Interaction("mail")
 	if status == true then
 		-- get the list of email
-		mailList = Inspect.Mail.List()
+		local mailList = Inspect.Mail.List()
 		-- checking how many email will be parsed (cannot  use table.getn, since this table contains key/values => only way is to iterate throught the table)
-		mail_number = 0
+		local mail_number = 0
 		for k,v in pairs(mailList) do
 			mail_number = mail_number + 1
 		end
 		-- index that stores the nuber of processed emails
-		processed_mail_count = 1
+		local processed_mail_count = 1
 		-- fetch through each emails
 		for k, v in pairs(mailList) do
 			-- if email hasn't been parsed previously
-			if not setContains(mail_history, k) or mail_history == {} then
+			if not SetContains(mail_history, k) or mail_history == {} then
 				-- open email to have access to details
-				mailOpen(k)
+				MailOpen(k)
 				Pause(0.2)
 				-- get details
-				details = (Inspect.Mail.Detail(k))
+				local details = (Inspect.Mail.Detail(k))
 				-- table that will store the mail content
-				mail_details = {}
+				local mail_details = {}
 				-- feeding the table
 				table.insert(mail_details, details["from"])
 				table.insert(mail_details, details["subject"])
 				table.insert(mail_details, details["body"])
 				--table.insert(mail_details, os.date)
 				-- table that will contain teh attachment list if there is any
-				attachment_list = {}
+				local attachment_list = {}
 				-- detecty if the is any attachment
 				if tonumber(details["attachments"]) == nil and details["attachments"] ~= nil then
 					-- add item ids in a table
@@ -504,7 +504,7 @@ local function mailboxparser()
 				table.insert(mail_details, attachment_list)
 				-- detect if mail is actually "read" (only way to declare the mail as processed)
 				if details["body"] ~= nil then
-					addToSet(mail_history, k, mail_details)
+					AddToSet(mail_history, k, mail_details)
 					processed_mail_count = processed_mail_count + 1
 				end
 
@@ -520,17 +520,17 @@ end
 
 
 
-local function launch_mailboxparser()
-	parsing_coro = coroutine.create(mailboxparser)
+local function LaunchMailboxParser()
+	parsing_coro = coroutine.create(MailboxParser)
 	AddCoroutine(parsing_coro)
 end
 
-local function launch_attachment_getter()
-	attachment_coro = coroutine.create(get_all_attachments)
+local function LaunchAttachmentGetter()
+	attachment_coro = coroutine.create(GetAllAttachments)
 	AddCoroutine(attachment_coro)
 end
 
-local function show_mailbox_window()
+local function ShowMailboxWindow()
 	-- display the window
 	if mail_window then
 		aherMailUI:SetVisible(true)
@@ -548,42 +548,42 @@ local function show_mailbox_window()
 	local l, t, r, b = mail_window:GetTrimDimensions()
 
 	-- creating the close button and setting its attributes
-	closebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	local closebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
 	closebutton:SetSkin("close")
 	closebutton:SetPoint("TOPRIGHT", mail_window, "TOPRIGHT", r * -1 + 3, b + 2)
 	closebutton.Event.LeftPress = function() mail_window:SetVisible(false) end
 
 	-- creating the Read email button and setting its attributes
-	scanbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	local scanbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
 	scanbutton:SetText("Read Mails")
 	scanbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 55)
-	scanbutton.Event.LeftPress = function() launch_mailboxparser() end
+	scanbutton.Event.LeftPress = function() LaunchMailboxParser() end
 
 	-- creating the Process email button and setting its attributes
-	postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	local postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
 	postbutton:SetText("Process Mails")
 	postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 55)
-	postbutton.Event.LeftPress = function() process() end
+	postbutton.Event.LeftPress = function() Process() end
 	-- creating the get attachments button and setting its attributes
-	postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
-	postbutton:SetText("Get Attachments")
-	postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 95)
-	--postbutton.Event.LeftPress = function() get_all_attachments() end
-	postbutton.Event.LeftPress = function() launch_attachment_getter() end
+	local attachmentbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	attachmentbutton:SetText("Get Attachments")
+	attachmentbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 95)
+	--attachmentbutton.Event.LeftPress = function() GetAllAttachments() end
+	attachmentbutton.Event.LeftPress = function() LaunchAttachmentGetter() end
 
 	-- creating the delete email button and setting its attributes
-	deletebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+	local deletebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
 	deletebutton:SetText("Delete Emails")
 	deletebutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 95)
-	deletebutton.Event.LeftPress = function() batch_delete_email() end
+	deletebutton.Event.LeftPress = function() BatchDeleteEmail() end
 
 end
 
 -- function that will display / hide the mail managemetn window based on being at the mailbox or not
-local function isAtMail()
+local function IsAtMail()
 	local status = Inspect.Interaction("mail")
 	if status then
-		show_mailbox_window()
+		ShowMailboxWindow()
 	else
 		if mail_window ~= nil then
 			aherMailUI:SetVisible(false)
@@ -607,18 +607,15 @@ local function AHResults(r1,r2)
 	-- fetching the player's name
 	local player_name = Inspect.Unit.Detail("player")["name"]
 	for key, value in pairs(ah_results) do
-		auction_detail = Inspect.Auction.Detail(value)
+		local auction_detail = Inspect.Auction.Detail(value)
 		if player_name == auction_detail["seller"] then
-			addToSet(items_listed_by_me, Inspect.Item.Detail(auction_detail["item"])["name"], value)
+			AddToSet(items_listed_by_me, Inspect.Item.Detail(auction_detail["item"])["name"], value)
 		end
-		addToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
-	end
-	if ah_results[1] ~= nil then
-		print("Scanning complete")
+		AddToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
 	end
 end
 
-local function scan_ah()
+local function ScanAH()
 	-- check for interaction with the AH window
 	local status = Inspect.Interaction("auction")
 	if status == true then
@@ -626,9 +623,12 @@ local function scan_ah()
 		local full_scan_is_not_queued = Inspect.Queue.Status("auctionfullscan")
 		if full_scan_is_not_queued then
 			-- determine the type of search
-			scan_params = {type="search"}
+			local scan_params = {type="search"}
 			-- execute the scan
 			Command.Auction.Scan(scan_params)
+			if ah_results[1] ~= nil and ah_results[1] ~= {} then
+				print("Scanning complete")
+			end
 		else
 			print("Full Auction scan is queued, wait a little before scanning again")
 		end
@@ -638,25 +638,25 @@ local function scan_ah()
 end
 
 -- function that posts an item for the specified values
-local function post_item(item_id, time, value, value, x, y, price_is_undercut)
+local function PostItem(item_id, time, value, value, x, y, price_is_undercut)
 	-- check if queue is available
-	if not QueueStatus() then
+	if not queueStatus then
 		-- posting the actual item
 		Command.Auction.Post(item_id, time, value, value)
 		-- checking the quantity of ongoing auctions for that item
-		local quantity = setContains(ongoing_auctions, Inspect.Item.Detail(item_id)["name"])
+		local quantity = SetContains(ongoing_auctions, Inspect.Item.Detail(item_id)["name"])
 		-- increment the quantity
 		if quantity ~= nil then
 			quantity = quantity + 1
-			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
+			AddToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], quantity)
 		else
-			addToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], 1)
+			AddToSet(ongoing_auctions, Inspect.Item.Detail(item_id)["name"], 1)
 		end
 		-- save the price if its not an undercut
 		if not price_is_undercut then
-			addToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
+			AddToSet(prices, Inspect.Item.Detail(item_id)["name"], value)
 		else
-			addToSet(undercut_auctions_list, Inspect.Item.Detail(item_id)["name"], value)
+			AddToSet(undercut_auctions_list, Inspect.Item.Detail(item_id)["name"], value)
 		end
 	else
 		-- check if debug mode is activated and pause if not in debug mode
@@ -664,13 +664,13 @@ local function post_item(item_id, time, value, value, x, y, price_is_undercut)
 			Pause(1)
 		end
 		-- call the post method again, since queue was busy
-		post_item(item_id, time, value, value, x, y, price_is_undercut)
+		PostItem(item_id, time, value, value, x, y, price_is_undercut)
 	end
 end
 
 -- function that checks if the item is already found on the auction house or not
-local function isThereCompetition(item_id)
-	if setContains(items_listed, Inspect.Item.Detail(item_id)["name"]) ~= nil then
+local function IsThereCompetition(item_id)
+	if SetContains(items_listed, Inspect.Item.Detail(item_id)["name"]) ~= nil then
 		return false
 	else
 		return true
@@ -678,8 +678,8 @@ local function isThereCompetition(item_id)
 end
 
 -- function that checks if the item is already listed by the player
-local function isAlreadyListed(item_id)
-	if setContains(items_listed_by_me, Inspect.Item.Detail(item_id)["name"]) ~= nil then
+local function IsAlreadyListed(item_id)
+	if SetContains(items_listed_by_me, Inspect.Item.Detail(item_id)["name"]) ~= nil then
 		return false
 	else
 		return true
@@ -687,9 +687,9 @@ local function isAlreadyListed(item_id)
 end
 
 -- function that finds the minimum price of and item on the AH
-local function search_for_undercut(item_id)
+local function SearchForUndercut(item_id)
 	-- if the queue is available
-	if not QueueStatus() then
+	if not queueStatus then
 		local item_name = Inspect.Item.Detail(item_id)["name"]
 		local player_name = Inspect.Unit.Detail("player")["name"]
 		-- determine the type of search
@@ -707,40 +707,40 @@ local function search_for_undercut(item_id)
 		end
 		return min_value
 	else
-		search_for_undercut(item_id)
+		SearchForUndercut(item_id)
 	end
 
 end
 
-local function batch_post_items()
+local function BatchPostItems()
 	for x=1, 5 do
-		bag_size = get_bag_size(x)
+		bag_size = GetBagSize(x)
 		for y=1, bag_size do
-			current_slot = Utility.Item.Slot.Inventory(x,y)
+			local current_slot = Utility.Item.Slot.Inventory(x,y)
 			if (Inspect.Item.Detail(current_slot) and not Inspect.Item.Detail(current_slot)["bound"]) then
-				item_id = Inspect.Item.List(current_slot)
+				local item_id = Inspect.Item.List(current_slot)
 				local stack_size = Inspect.Item.Detail(current_slot)["stack"]
-				-- determining value to post for
 				local status = "0"
 				local value = 0
-				local competition_not_found = isThereCompetition(item_id)
-				local already_listed = isAlreadyListed(item_id)
+				local competition_not_found = IsThereCompetition(item_id)
+				local already_listed = IsAlreadyListed(item_id)
 				local undercut_price = nil
 				local not_posted_before = false
 				local within_margin = true
 				local price_is_undercut = false
 
-
+				local item_name = Inspect.Item.Detail(item_id)["name"]
+				
 				if not competition_not_found then
-					undercut_price = search_for_undercut(item_id)
+					undercut_price = SearchForUndercut(item_id)
 					if not allow_to_undercut then
 						status = "5"
 					end
 				end
 
 
-				if setContains(prices, Inspect.Item.Detail(current_slot)["name"]) ~= nil then
-					value = setContains(prices, Inspect.Item.Detail(current_slot)["name"])
+				if SetContains(prices, item_name) ~= nil then
+					value = SetContains(prices, item_name)
 				else
 					not_posted_before = true
 					status = "1"
@@ -753,8 +753,8 @@ local function batch_post_items()
 				if stack_size ~= nil and not not_posted_before then
 					if stack_size > 1 then
 						if status == "0" then
-							if setContains(splited_items, Inspect.Item.Detail(item_id)["name"]) == nil then
-								addToSet(splited_items, Inspect.Item.Detail(item_id)["name"], 1)
+							if SetContains(splited_items, item_name) == nil then
+								AddToSet(splited_items, item_name, 1)
 								Command.Item.Split(item_id, 1)
 								status = "6"
 							end
@@ -780,25 +780,25 @@ local function batch_post_items()
 				--value = value * stack_size
 
 				-- posting the item
-				switch(status) : caseof {
+				Switch(status) : caseof {
 				["0"] = function ()
-					local stack_size = Inspect.Item.Detail(current_slot)["stack"]
-					if stack_size == 1 then
-						post_item(item_id, auction_time, value, value, x, y, price_is_undercut)
-						if setContains(splited_items, item_id) then
-						removeFromSet(splited_items, Inspect.Item.Detail(item_id)["name"])
-					end
+					local stack_size_before_post = Inspect.Item.Detail(current_slot)["stack"]
+					if stack_size_before_post == 1 or stack_size_before_post == nil then
+						PostItem(item_id, auction_time, value, value, x, y, price_is_undercut)
+						if SetContains(splited_items, item_id) then
+							RemoveFromSet(splited_items, item_name)
+						end
 					end
 					if not debugMode then
 						Pause(1)
 					end
 				end,
-				["1"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was never posted before, post manually and then record the prices") end,
-				["2"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was already posted once") end,
-				["3"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, but item is already posted") end,
-				["4"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was underut for too low to match") end,
-				["5"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Was not posted as undercutting isn't activated") end,
-				["6"] = function () print(Inspect.Item.Detail(current_slot)["name"] .. " Stack is bigger than 1, it was splited, try to post again") end
+				["1"] = function () print(item_name .. " Was never posted before, post manually and then record the prices") end,
+				["2"] = function () print(item_name .. " Was already posted once") end,
+				["3"] = function () print(item_name .. " Stack is bigger than 1, but item is already posted") end,
+				["4"] = function () print(item_name .. " Was underut for too low to match") end,
+				["5"] = function () print(item_name .. " Was not posted as undercutting isn't activated") end,
+				["6"] = function () print(item_name .. " Stack is bigger than 1, it was splited, try to post again") end
 				}
 			end
 		end
@@ -811,19 +811,19 @@ local function batch_post_items()
 end
 
 
-local function record_prices()
+local function RecordPrices()
 	local full_scan_is_not_queued = Inspect.Queue.Status("auctionfullscan")
 	if full_scan_is_not_queued then
 		-- determine the type of search
-		scan_params = {type="mine"}
+		local scan_params = {type="mine"}
 		-- execute the scan
 		Command.Auction.Scan(scan_params)
 		for key, auctionid in pairs(ah_results) do
 			local auction_details = Inspect.Auction.Detail(auctionid)
 			local item_name = Inspect.Item.Detail(auction_details["item"])["name"]
 			local value = auction_details["buyout"]
-			if setContains(prices, item_name) == nil and not setContains(undercut_auctions_list_db, item_name) then
-				addToSet(prices, item_name, value)
+			if SetContains(prices, item_name) == nil and not SetContains(undercut_auctions_list_db, item_name) then
+				AddToSet(prices, item_name, value)
 			end
 		end
 		print("Prices recorded sucessfully")
@@ -833,19 +833,30 @@ local function record_prices()
 end
 
 
-local function launch_post()
+local function LaunchPost()
 	if not debugMode then
-		post_coro = coroutine.create(batch_post_items)
+		local post_coro = coroutine.create(BatchPostItems)
 		AddCoroutine(post_coro)
 	else
-		batch_post_items()
+		BatchPostItems()
+	end
+end
+
+local function CancelLastAuction()
+	if items_listed_by_me ~= {} then
+		for k,v in pairs(items_listed_by_me) do
+			Command.Auction.Cancel(v)
+			break
+		end
+	else
+		print("Either you don't have any auctions listed or you didn't scanned the auction house yet.")
 	end
 end
 
 
 
 -- adding the main window
-local function makewindow()
+local function ShowAHWindow()
 	-- display the window
 	if window then
 		aherUI:SetVisible(true)
@@ -863,36 +874,42 @@ local function makewindow()
 	local l, t, r, b = window:GetTrimDimensions()
 
 	-- creating the close button and setting its attributes
-	closebutton = UI.CreateFrame("RiftButton", "AHer", window)
+	local closebutton = UI.CreateFrame("RiftButton", "AHer", window)
 	closebutton:SetSkin("close")
 	closebutton:SetPoint("TOPRIGHT", window, "TOPRIGHT", r * -1 + 3, b + 2)
 	closebutton.Event.LeftPress = function() window:SetVisible(false) end
 
 	-- creating the scan button and setting its attributes
-	scanbutton = UI.CreateFrame("RiftButton", "AHer", window)
+	local scanbutton = UI.CreateFrame("RiftButton", "AHer", window)
 	scanbutton:SetText("Scan")
 	scanbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 55)
-	scanbutton.Event.LeftPress = function() scan_ah() end
+	scanbutton.Event.LeftPress = function() ScanAH() end
 
 	-- creating the post button and setting its attributes
-	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
+	local postbutton = UI.CreateFrame("RiftButton", "AHer", window)
 	postbutton:SetText("Batch Post")
 	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 55)
-	postbutton.Event.LeftPress = function() launch_post() end
-	--postbutton.Event.LeftPress = function() batch_post_items() end
+	postbutton.Event.LeftPress = function() LaunchPost() end
+	--postbutton.Event.LeftPress = function() BatchPostItems() end
 
 	-- creating the post button and setting its attributes
-	postbutton = UI.CreateFrame("RiftButton", "AHer", window)
-	postbutton:SetText("Record Prices")
-	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 95)
-	postbutton.Event.LeftPress = function() record_prices() end
+	local recordbutton = UI.CreateFrame("RiftButton", "AHer", window)
+	recordbutton:SetText("Record Prices")
+	recordbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 95)
+	recordbutton.Event.LeftPress = function() RecordPrices() end
+
+	-- creating the post button and setting its attributes
+	local cancelbutton = UI.CreateFrame("RiftButton", "AHer", window)
+	cancelbutton:SetText("Cancel Last")
+	cancelbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 95)
+	cancelbutton.Event.LeftPress = function() CancelLastAuction() end
 
 end
 
-local function isAtAH()
+local function IsAtAH()
 	local status = Inspect.Interaction("auction")
 	if status then
-		makewindow()
+		ShowAHWindow()
 	else
 		if window ~= nil then
 			aherUI:SetVisible(false)
@@ -903,7 +920,7 @@ end
 
 
 -- Save the database
-local function settingssave()
+local function SettingsSave()
 	mail_history_db = mail_history
 	auction_pre_process_db = auction_pre_process
 	auction_results_db = auction_results
@@ -919,7 +936,7 @@ local function settingssave()
 end
 
 -- reload the settings database
-local function settingsload()
+local function SettingsLoad()
 	print("aher settings loading...")
 	if mail_history_db ~= nil then
 		mail_history = mail_history_db
@@ -991,7 +1008,7 @@ local function settingsload()
 
 end
 
-local function printhelp()
+local function PrintHelp()
 	print("Available options are: \n status mail : to get the list of mails to process \n status pre : to get the list of auctions to process \n status auc : to get the list of processed auctions \n time (12,24,48): will post auctions for that duration \n debug: will activate some 'debug' features \n allow (on/off): turn on/off undercutting when posting")
 end
 
@@ -1002,24 +1019,24 @@ aherUI = UI.CreateContext("AHer")
 aherMailUI = UI.CreateContext("AHer")
 
 -- adding the event handler triggers to save/load the databases
-table.insert(Event.Addon.SavedVariables.Save.Begin, {function () settingssave() end, "aher", "Save variables"})
-table.insert(Event.Addon.SavedVariables.Load.Begin, {function () settingsload() end, "aher", "Load variables"})
-table.insert(Event.Auction.Scan, {makewindow, "aher", "Process AH data"})
+table.insert(Event.Addon.SavedVariables.Save.Begin, {function () SettingsSave() end, "aher", "Save variables"})
+table.insert(Event.Addon.SavedVariables.Load.Begin, {function () SettingsLoad() end, "aher", "Load variables"})
+table.insert(Event.Auction.Scan, {ShowAHWindow, "aher", "Process AH data"})
 table.insert(Event.Auction.Scan, {AHResults, "aher", "AHResults" })
-table.insert(Event.Queue.Status, {QueueStatus, "aher", "Queue Status"})
-table.insert(Event.System.Update.Begin, {function() isAtMail() end, "aher", "isAtMail" })
-table.insert(Event.System.Update.Begin, {function() isAtAH() end, "aher", "isAtAH" })
+table.insert(Event.Queue.Status, {CheckForQueueStatus, "aher", "Queue Status"})
+table.insert(Event.System.Update.Begin, {function() IsAtMail() end, "aher", "isAtMail" })
+table.insert(Event.System.Update.Begin, {function() IsAtAH() end, "aher", "isAtAH" })
 
 SetupCoroutineTable()
 
 table.insert(Event.System.Update.Begin, {function() ResumeAllCoroutines() end, "aher", "OnUpdate" })
 
 -- adding the slash commands parameters
-local function slashcommands(command)
-	switch(command) : caseof {
-	["status auc"] = function () mailstatus("auction") end,
-	["status pre"] = function () mailstatus("pre-auction") end,
-	["status mail"] = function () mailstatus("mail") end,
+local function SlashCommands(command)
+	Switch(command) : caseof {
+	["status auc"] = function () MailStatus("auction") end,
+	["status pre"] = function () MailStatus("pre-auction") end,
+	["status mail"] = function () MailStatus("mail") end,
 	["time 48"] = function ()
 		auction_time = 48
 		print("Auctions will be posted for 48 hours")
@@ -1048,9 +1065,9 @@ local function slashcommands(command)
 		allow_to_undercut = true
 		print("undercutting will be allowed")
 	end,
-	default = function() printhelp() end,
+	default = function() PrintHelp() end,
 	}
 end
 
 -- adding the slash commands handler
-table.insert(Command.Slash.Register("aher"), {slashcommands, "aher", "Slash command"})
+table.insert(Command.Slash.Register("aher"), {SlashCommands, "aher", "Slash command"})
