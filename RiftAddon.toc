@@ -5,12 +5,6 @@ Author = "algritz@videotron.ca"
 Version = "0.0.1"
 Email = "algritz@videotron.ca"
 Environment = "1.7"
-Embed = {
-	LibSimpleWidgets = true,
-}
-Dependencies = {
-	LibSimpleWidgets = {"required", "before"},
-};
 RunOnStartup = {
 	"aher.lua"
 }
