@@ -1,7 +1,8 @@
 local splited_items = {}
 -- Coroutines management table
+local coroutine_table = {}
 local function SetupCoroutineTable()
-	coroutine_table = { };
+	coroutine_table = coroutine_table or { };
 end
 
 -- adds a coroutine to the queue
@@ -25,7 +26,7 @@ end
 -- loops through the coroutines lists and calls the resume handler
 local function ResumeAllCoroutines()
 	-- make sure there is something to process
-	if coroutine_table ~= {} then
+	if #coroutine_table > 0 then
 		for Index,Item in ipairs(coroutine_table) do
 			ResumeCoroutine(Index);
 		end
@@ -536,7 +537,7 @@ local function ShowMailboxWindow()
 		aherMailUI:SetVisible(true)
 		mail_window:SetVisible(true)
 		return
-	end
+	else
 	-- creating the frame and setting attributes
 	mail_window = UI.CreateFrame("RiftWindow", "AHer", aherMailUI)
 	mail_window:SetWidth(350)
@@ -576,7 +577,7 @@ local function ShowMailboxWindow()
 	deletebutton:SetText("Delete Emails")
 	deletebutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 95)
 	deletebutton.Event.LeftPress = function() BatchDeleteEmail() end
-
+	end
 end
 
 -- function that will display / hide the mail managemetn window based on being at the mailbox or not
@@ -862,7 +863,7 @@ local function ShowAHWindow()
 		aherUI:SetVisible(true)
 		window:SetVisible(true)
 		return
-	end
+	else
 	-- creating the frame and setting attributes
 	window = UI.CreateFrame("RiftWindow", "AHer", aherUI)
 	window:SetWidth(350)
@@ -903,7 +904,7 @@ local function ShowAHWindow()
 	cancelbutton:SetText("Cancel Last")
 	cancelbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 95)
 	cancelbutton.Event.LeftPress = function() CancelLastAuction() end
-
+	end
 end
 
 local function IsAtAH()
