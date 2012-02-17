@@ -1,4 +1,6 @@
+local debugMode = false
 local splited_items = {}
+local player_name = Inspect.Unit.Detail("player")["name"]
 -- Coroutines management table
 local coroutine_table = {}
 local function SetupCoroutineTable()
@@ -605,8 +607,7 @@ local function AHResults(r1,r2)
 	items_listed_by_me = {}
 	-- list that will contain the items that are listed (used to determine if there is competition or not)
 	items_listed = {}
-	-- fetching the player's name
-	local player_name = Inspect.Unit.Detail("player")["name"]
+	
 	for key, value in pairs(ah_results) do
 		local auction_detail = Inspect.Auction.Detail(value)
 		if player_name == auction_detail["seller"] then
@@ -692,12 +693,16 @@ local function SearchForUndercut(item_id)
 	-- if the queue is available
 	if not queueStatus then
 		local item_name = Inspect.Item.Detail(item_id)["name"]
-		local player_name = Inspect.Unit.Detail("player")["name"]
+		
 		-- determine the type of search
 		local min_value = 99999999
 		for key, auctionid in pairs(ah_results) do
 			local auction_details = Inspect.Auction.Detail(auctionid)
+			local auction_stack = Inspect.Item.Detail(auction_details["item"])["stack"]	
 			local value = auction_details["bid"]
+			if auction_stack ~= nil then
+				value = value / auction_stack
+			end
 			if item_name == Inspect.Item.Detail(auction_details["item"])["name"] then
 				if player_name ~= auction_details["seller"] then
 					if value < min_value then
@@ -710,7 +715,6 @@ local function SearchForUndercut(item_id)
 	else
 		SearchForUndercut(item_id)
 	end
-
 end
 
 local function BatchPostItems()
@@ -731,7 +735,6 @@ local function BatchPostItems()
 				local price_is_undercut = false
 
 				local item_name = Inspect.Item.Detail(item_id)["name"]
-				
 				if not competition_not_found then
 					undercut_price = SearchForUndercut(item_id)
 					if not allow_to_undercut then
@@ -751,7 +754,19 @@ local function BatchPostItems()
 					status = "2"
 				end
 
-				if stack_size ~= nil and not not_posted_before then
+				if undercut_price ~= nil and status == "0" then
+					if (undercut_price / value) > 0.85 then
+						within_margin = false
+						value = undercut_price * 0.98
+						value = math.ceil(value)
+						value = value - 1
+						price_is_undercut = true
+					else
+						status = "4"
+					end
+				end
+				
+				if stack_size ~= nil and not not_posted_before and status == "0" then
 					if stack_size > 1 then
 						if status == "0" then
 							if SetContains(splited_items, item_name) == nil then
@@ -764,17 +779,6 @@ local function BatchPostItems()
 								status = "3"
 							end
 						end
-					end
-				end
-				if undercut_price ~= nil and status == "0" then
-					if (undercut_price / value) > 0.85 then
-						within_margin = false
-						value = undercut_price * 0.98
-						value = math.ceil(value)
-						value = value - 1
-						price_is_undercut = true
-					else
-						status = "4"
 					end
 				end
 				-- For the moment, do not * value by stack size as the final "amount" cannot tell the initial size of the stack
@@ -930,7 +934,6 @@ local function SettingsSave()
 	ongoing_auctions_db = ongoing_auctions
 	sold_count_db = sold_count
 	expired_count_db = expired_count
-	debugMode_settings = debugMode
 	auction_time_settings = auction_time
 	allow_to_undercut_settings = allow_to_undercut
 	undercut_auctions_list_db = undercut_auctions_list
@@ -982,12 +985,7 @@ local function SettingsLoad()
 		print("loading expired count list failed")
 		expired_count = {}
 	end
-	if debugMode_settings ~= nil then
-		debugMode = debugMode_settings
-	else
-		print("loading debug mode status failed")
-		debugMode = false
-	end
+	
 	if auction_time_settings ~= nil then
 		auction_time = auction_time_settings
 	else
