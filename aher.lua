@@ -122,7 +122,7 @@ local function MailOpen(k)
 	if not queueStatus then
 		Command.Mail.Open(k)
 	else
-		pause(0.2)
+		pause(0.4)
 		MailOpen(k)
 	end
 end
@@ -256,12 +256,12 @@ local function GetAllAttachments()
 					-- verify if the item is in the item_in_inventory database
 					if FindFreeSpace then
 						TakeAttachment(auctionkey, auctionvalue[3])
-						Pause(0.2)
+						Pause(0.4)
 					end
 				else
 					print("should delete email (seen as empty)")
 					DeleteEmail(auctionkey)
-					Pause(0.2)
+					Pause(0.4)
 				end
 			end
 		end
@@ -485,7 +485,7 @@ local function MailboxParser()
 			if not SetContains(mail_history, k) or mail_history == {} then
 				-- open email to have access to details
 				MailOpen(k)
-				Pause(0.2)
+				Pause(0.4)
 				-- get details
 				local details = (Inspect.Mail.Detail(k))
 				-- table that will store the mail content
@@ -540,45 +540,45 @@ local function ShowMailboxWindow()
 		mail_window:SetVisible(true)
 		return
 	else
-	-- creating the frame and setting attributes
-	mail_window = UI.CreateFrame("RiftWindow", "AHer", aherMailUI)
-	mail_window:SetWidth(350)
-	mail_window:SetHeight(150)
-	mail_window:SetTitle("AHer")
-	mail_window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 1125, 75)
+		-- creating the frame and setting attributes
+		mail_window = UI.CreateFrame("RiftWindow", "AHer", aherMailUI)
+		mail_window:SetWidth(350)
+		mail_window:SetHeight(150)
+		mail_window:SetTitle("AHer")
+		mail_window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 1125, 75)
 
-	-- storing window size for future usage
-	local l, t, r, b = mail_window:GetTrimDimensions()
+		-- storing window size for future usage
+		local l, t, r, b = mail_window:GetTrimDimensions()
 
-	-- creating the close button and setting its attributes
-	local closebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
-	closebutton:SetSkin("close")
-	closebutton:SetPoint("TOPRIGHT", mail_window, "TOPRIGHT", r * -1 + 3, b + 2)
-	closebutton.Event.LeftPress = function() mail_window:SetVisible(false) end
+		-- creating the close button and setting its attributes
+		local closebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+		closebutton:SetSkin("close")
+		closebutton:SetPoint("TOPRIGHT", mail_window, "TOPRIGHT", r * -1 + 3, b + 2)
+		closebutton.Event.LeftPress = function() mail_window:SetVisible(false) end
 
-	-- creating the Read email button and setting its attributes
-	local scanbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
-	scanbutton:SetText("Read Mails")
-	scanbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 55)
-	scanbutton.Event.LeftPress = function() LaunchMailboxParser() end
+		-- creating the Read email button and setting its attributes
+		local scanbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+		scanbutton:SetText("Read Mails")
+		scanbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 55)
+		scanbutton.Event.LeftPress = function() LaunchMailboxParser() end
 
-	-- creating the Process email button and setting its attributes
-	local postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
-	postbutton:SetText("Process Mails")
-	postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 55)
-	postbutton.Event.LeftPress = function() Process() end
-	-- creating the get attachments button and setting its attributes
-	local attachmentbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
-	attachmentbutton:SetText("Get Attachments")
-	attachmentbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 95)
-	--attachmentbutton.Event.LeftPress = function() GetAllAttachments() end
-	attachmentbutton.Event.LeftPress = function() LaunchAttachmentGetter() end
+		-- creating the Process email button and setting its attributes
+		local postbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+		postbutton:SetText("Process Mails")
+		postbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 55)
+		postbutton.Event.LeftPress = function() Process() end
+		-- creating the get attachments button and setting its attributes
+		local attachmentbutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+		attachmentbutton:SetText("Get Attachments")
+		attachmentbutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 45, 95)
+		--attachmentbutton.Event.LeftPress = function() GetAllAttachments() end
+		attachmentbutton.Event.LeftPress = function() LaunchAttachmentGetter() end
 
-	-- creating the delete email button and setting its attributes
-	local deletebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
-	deletebutton:SetText("Delete Emails")
-	deletebutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 95)
-	deletebutton.Event.LeftPress = function() BatchDeleteEmail() end
+		-- creating the delete email button and setting its attributes
+		local deletebutton = UI.CreateFrame("RiftButton", "AHer", mail_window)
+		deletebutton:SetText("Delete Emails")
+		deletebutton:SetPoint("TOPLEFT", mail_window, "TOPLEFT", 185, 95)
+		deletebutton.Event.LeftPress = function() BatchDeleteEmail() end
 	end
 end
 
@@ -599,21 +599,62 @@ end
 -- function that will store the results of any auction_house search
 local function AHResults(r1,r2)
 	-- main table that will contain the "whole results"
-	ah_results = {}
+	--ah_results = {}
 	for k,v in pairs(r2) do
-		table.insert(ah_results, k)
+		--table.insert(ah_results, k)
+		AddToSet(ah_results, k)
 	end
 	-- list that will conaitn only the auctions I listed
 	items_listed_by_me = {}
 	-- list that will contain the items that are listed (used to determine if there is competition or not)
 	items_listed = {}
-	
+
 	for key, value in pairs(ah_results) do
+		-- hold the etails of that auction
 		local auction_detail = Inspect.Auction.Detail(value)
+		-- check if the player is the seller
 		if player_name == auction_detail["seller"] then
 			AddToSet(items_listed_by_me, Inspect.Item.Detail(auction_detail["item"])["name"], value)
 		end
-		AddToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
+		-- check if the item is already known to be listed
+		if SetContains(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"]) == nil then
+			-- determine its price per item
+			local stacksize = Inspect.Item.Detail(auction_detail["item"])["stack"]
+			local auction_price = auction_detail["bid"]
+			if stacksize ~= nil then
+				local value_per = auction_price / stacksize
+			else
+				local value_per = auction_price
+			end
+			-- add it to the list of listed items
+			AddToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
+		else
+			-- determine the price per item for teh current auction
+			local stacksize = Inspect.Item.Detail(auction_detail["item"])["stack"]
+			local auction_price = auction_detail["bid"]
+			local value_per = 0
+			if stacksize ~= nil then
+				value_per = auction_price / stacksize
+			else
+				value_per = auction_price
+			end
+			-- determine the price per item for the listing already saved
+			local previous_auction = SetContains(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"])
+			local previous_auction_detail = Inspect.Auction.Detail(previous_auction)
+			local previous_auction_bid = previous_auction_detail["bid"]
+			local previous_auction_item_id = previous_auction_detail["item"]
+			local previous_auction_stacksize = Inspect.Item.Detail(previous_auction_item_id)["stack"]
+			local previous_auction_value_per = 0
+			if previous_auction_stacksize ~= nil then
+				previous_auction_value_per = previous_auction_bid / previous_auction_stacksize
+			else
+				previous_auction_value_per = previous_auction_bid
+			end
+			-- if the new listing is lower, store that price instead
+			if value_per < previous_auction_value_per then
+				AddToSet(items_listed, Inspect.Item.Detail(auction_detail["item"])["name"], value)
+			end			
+		end
 	end
 end
 
@@ -629,7 +670,8 @@ local function ScanAH()
 			-- execute the scan
 			Command.Auction.Scan(scan_params)
 			if ah_results[1] ~= nil and ah_results[1] ~= {} then
-				print("Scanning complete")
+				print("Scanning complete :")
+				print(#ah_results .. " items are listed")
 			end
 		else
 			print("Full Auction scan is queued, wait a little before scanning again")
@@ -693,24 +735,22 @@ local function SearchForUndercut(item_id)
 	-- if the queue is available
 	if not queueStatus then
 		local item_name = Inspect.Item.Detail(item_id)["name"]
-		
+
 		-- determine the type of search
 		local min_value = 99999999
-		for key, auctionid in pairs(ah_results) do
-			local auction_details = Inspect.Auction.Detail(auctionid)
-			local auction_stack = Inspect.Item.Detail(auction_details["item"])["stack"]	
-			local value = auction_details["bid"]
-			if auction_stack ~= nil then
-				value = value / auction_stack
-			end
-			if item_name == Inspect.Item.Detail(auction_details["item"])["name"] then
-				if player_name ~= auction_details["seller"] then
-					if value < min_value then
-						min_value = value
-					end
-				end
-			end
+		local auction_to_beat = SetContains(items_listed, item_name)
+		local auction_to_beat_detail = Inspect.Auction.Detail(auction_to_beat)
+		
+		local auction_to_beat_bid_value = auction_to_beat_detail["bid"]
+		local auction_to_beat_item_id =  auction_to_beat_detail["item"]
+		local auction_to_beat_stacksize = Inspect.Item.Detail(auction_to_beat_item_id)["stack"]
+		
+		if auction_to_beat_stacksize ~= nil then
+			minvalue = auction_to_beat_bid_value / auction_to_beat_stacksize
+		else
+			min_value = auction_to_beat_bid_value
 		end
+		 
 		return min_value
 	else
 		SearchForUndercut(item_id)
@@ -733,15 +773,16 @@ local function BatchPostItems()
 				local not_posted_before = false
 				local within_margin = true
 				local price_is_undercut = false
-
 				local item_name = Inspect.Item.Detail(item_id)["name"]
+
+
 				if not competition_not_found then
-					undercut_price = SearchForUndercut(item_id)
-					if not allow_to_undercut then
+					if allow_to_undercut then
+						undercut_price = SearchForUndercut(item_id)
+					else
 						status = "5"
 					end
 				end
-
 
 				if SetContains(prices, item_name) ~= nil then
 					value = SetContains(prices, item_name)
@@ -765,7 +806,7 @@ local function BatchPostItems()
 						status = "4"
 					end
 				end
-				
+
 				if stack_size ~= nil and not not_posted_before and status == "0" then
 					if stack_size > 1 then
 						if status == "0" then
@@ -868,46 +909,46 @@ local function ShowAHWindow()
 		window:SetVisible(true)
 		return
 	else
-	-- creating the frame and setting attributes
-	window = UI.CreateFrame("RiftWindow", "AHer", aherUI)
-	window:SetWidth(350)
-	window:SetHeight(145)
-	window:SetTitle("AHer")
-	window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 1125, 75)
+		-- creating the frame and setting attributes
+		window = UI.CreateFrame("RiftWindow", "AHer", aherUI)
+		window:SetWidth(350)
+		window:SetHeight(145)
+		window:SetTitle("AHer")
+		window:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 1125, 75)
 
-	-- storing window size for future usage
-	local l, t, r, b = window:GetTrimDimensions()
+		-- storing window size for future usage
+		local l, t, r, b = window:GetTrimDimensions()
 
-	-- creating the close button and setting its attributes
-	local closebutton = UI.CreateFrame("RiftButton", "AHer", window)
-	closebutton:SetSkin("close")
-	closebutton:SetPoint("TOPRIGHT", window, "TOPRIGHT", r * -1 + 3, b + 2)
-	closebutton.Event.LeftPress = function() window:SetVisible(false) end
+		-- creating the close button and setting its attributes
+		local closebutton = UI.CreateFrame("RiftButton", "AHer", window)
+		closebutton:SetSkin("close")
+		closebutton:SetPoint("TOPRIGHT", window, "TOPRIGHT", r * -1 + 3, b + 2)
+		closebutton.Event.LeftPress = function() window:SetVisible(false) end
 
-	-- creating the scan button and setting its attributes
-	local scanbutton = UI.CreateFrame("RiftButton", "AHer", window)
-	scanbutton:SetText("Scan")
-	scanbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 55)
-	scanbutton.Event.LeftPress = function() ScanAH() end
+		-- creating the scan button and setting its attributes
+		local scanbutton = UI.CreateFrame("RiftButton", "AHer", window)
+		scanbutton:SetText("Scan")
+		scanbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 55)
+		scanbutton.Event.LeftPress = function() ScanAH() end
 
-	-- creating the post button and setting its attributes
-	local postbutton = UI.CreateFrame("RiftButton", "AHer", window)
-	postbutton:SetText("Batch Post")
-	postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 55)
-	postbutton.Event.LeftPress = function() LaunchPost() end
-	--postbutton.Event.LeftPress = function() BatchPostItems() end
+		-- creating the post button and setting its attributes
+		local postbutton = UI.CreateFrame("RiftButton", "AHer", window)
+		postbutton:SetText("Batch Post")
+		postbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 55)
+		postbutton.Event.LeftPress = function() LaunchPost() end
+		--postbutton.Event.LeftPress = function() BatchPostItems() end
 
-	-- creating the post button and setting its attributes
-	local recordbutton = UI.CreateFrame("RiftButton", "AHer", window)
-	recordbutton:SetText("Record Prices")
-	recordbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 95)
-	recordbutton.Event.LeftPress = function() RecordPrices() end
+		-- creating the post button and setting its attributes
+		local recordbutton = UI.CreateFrame("RiftButton", "AHer", window)
+		recordbutton:SetText("Record Prices")
+		recordbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 45, 95)
+		recordbutton.Event.LeftPress = function() RecordPrices() end
 
-	-- creating the post button and setting its attributes
-	local cancelbutton = UI.CreateFrame("RiftButton", "AHer", window)
-	cancelbutton:SetText("Cancel Last")
-	cancelbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 95)
-	cancelbutton.Event.LeftPress = function() CancelLastAuction() end
+		-- creating the post button and setting its attributes
+		local cancelbutton = UI.CreateFrame("RiftButton", "AHer", window)
+		cancelbutton:SetText("Cancel Last")
+		cancelbutton:SetPoint("TOPLEFT", window, "TOPLEFT", 185, 95)
+		cancelbutton.Event.LeftPress = function() CancelLastAuction() end
 	end
 end
 
@@ -985,7 +1026,7 @@ local function SettingsLoad()
 		print("loading expired count list failed")
 		expired_count = {}
 	end
-	
+
 	if auction_time_settings ~= nil then
 		auction_time = auction_time_settings
 	else
